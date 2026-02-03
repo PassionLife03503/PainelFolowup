@@ -19,7 +19,67 @@
 </head>
 
 <body class="dark-theme">
-    <div class="app-container">
+    <!-- Login Screen -->
+    <div id="login-screen" class="login-overlay">
+        <div class="login-card fade-in">
+            <div class="login-logo">
+                <span class="logo-text">PASSION<span class="logo-accent">LIFE</span></span>
+                <p>VIVA COM PASSION</p>
+            </div>
+
+            <!-- Tabs -->
+            <div class="login-tabs">
+                <button class="login-tab active" id="tab-login" onclick="switchLoginTab('login')">Login</button>
+                <button class="login-tab" id="tab-register" onclick="switchLoginTab('register')">Cadastro</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="login-form">
+                <div class="form-group">
+                    <label>E-mail ou Telefone</label>
+                    <input type="text" id="login-identifier" placeholder="exemplo@email.com ou 11999999999" required>
+                </div>
+                <div class="form-group">
+                    <label>Senha</label>
+                    <input type="password" id="login-password" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn-primary w-100">
+                    Entrar
+                    <i data-lucide="log-in"></i>
+                </button>
+                <div id="login-error" class="login-error-msg">E-mail/Telefone ou senha incorretos</div>
+            </form>
+
+            <!-- Register Form -->
+            <form id="register-form" style="display: none;">
+                <div class="form-group">
+                    <label>Nome Completo</label>
+                    <input type="text" id="reg-name" placeholder="Seu nome" required>
+                </div>
+                <div class="form-group">
+                    <label>E-mail</label>
+                    <input type="email" id="reg-email" placeholder="exemplo@email.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Telefone</label>
+                    <input type="tel" id="reg-phone" placeholder="11999999999" required>
+                </div>
+                <div class="form-group">
+                    <label>Senha</label>
+                    <input type="password" id="reg-password" placeholder="Crie uma senha" required>
+                </div>
+                <button type="submit" class="btn-primary w-100">
+                    Criar Conta
+                    <i data-lucide="user-plus"></i>
+                </button>
+                <div id="reg-success" class="login-success-msg"
+                    style="color: #10b981; text-align: center; margin-top: 1rem; display: none;">Conta criada! Faça
+                    login.</div>
+            </form>
+        </div>
+    </div>
+
+    <div class="app-container" id="main-app" style="display: none;">
         <!-- Mobile Menu Toggle -->
         <button id="mobile-menu-toggle" class="mobile-toggle">
             <i data-lucide="menu"></i>
@@ -35,6 +95,10 @@
                     <i data-lucide="users"></i>
                     <span>Follow-up</span>
                 </a>
+                <a href="#" class="nav-item" data-section="contacted">
+                    <i data-lucide="send"></i>
+                    <span>Contatados</span>
+                </a>
                 <a href="#" class="nav-item" data-section="reports">
                     <i data-lucide="bar-chart-3"></i>
                     <span>Relatórios</span>
@@ -46,11 +110,22 @@
             </nav>
             <div class="sidebar-footer">
                 <div class="user-profile">
-                    <div class="avatar">VP</div>
+                    <div class="avatar" id="display-user-avatar">VP</div>
                     <div class="user-info">
-                        <span class="user-name">Vendas Passion</span>
-                        <span class="user-role">Equipe Comercial</span>
+                        <span class="user-name" id="display-user-name">Vendas Passion</span>
+                        <span class="user-role" id="display-user-role">Equipe Comercial</span>
                     </div>
+                </div>
+                <button id="btn-logout" class="btn-icon"
+                    style="margin-top: 1rem; color: #ef4444; width: 100%; justify-content: flex-start; gap: 10px; padding: 0.8rem; border-radius: 12px;">
+                    <i data-lucide="log-out"></i>
+                    <span style="font-size: 0.9rem;">Sair da Conta</span>
+                </button>
+                <div id="db-status"
+                    style="margin-top: 10px; font-size: 0.7rem; color: #94a3b8; display: flex; align-items: center; gap: 6px;">
+                    <span id="db-status-dot"
+                        style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></span>
+                    <span id="db-status-text">Cloud Offline</span>
                 </div>
             </div>
         </aside>
@@ -65,6 +140,10 @@
                         <p>Gerencie seus leads e reative clientes com eficiência.</p>
                     </div>
                     <div class="header-actions">
+                        <button id="clear-data" class="btn-secondary">
+                            <i data-lucide="trash-2"></i>
+                            Limpar Dados
+                        </button>
                         <label for="excel-upload" class="btn-primary">
                             <i data-lucide="upload-cloud"></i>
                             Importar Planilha
@@ -129,8 +208,9 @@
                         <table>
                             <thead>
                                 <tr>
+                                    <th style="width: 50px;"></th>
                                     <th>Nome do Cliente</th>
-                                    <th>Último Contato</th>
+                                    <th>Data de Cadastro</th>
                                     <th>Status</th>
                                     <th>Próxima Ação</th>
                                     <th class="text-right">Ações</th>
@@ -167,6 +247,49 @@
                         <div class="table-info" id="table-info">
                             Mostrando 0 de 0 leads
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Contacted Clients Section -->
+            <section id="section-contacted" class="content-section">
+                <header class="top-header">
+                    <div class="header-title">
+                        <h1>Histórico de Contatos</h1>
+                        <p>Visualize todos os clientes que já receberam mensagem ou tiveram ação registrada.</p>
+                    </div>
+                </header>
+
+                <div class="table-container fade-in">
+                    <div class="table-header">
+                        <div class="search-box">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="contacted-search-input" placeholder="Buscar nos contatados...">
+                        </div>
+                    </div>
+
+                    <div class="responsive-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;"></th>
+                                    <th>Nome do Cliente</th>
+                                    <th>Status Original</th>
+                                    <th>Última Ação</th>
+                                    <th class="text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="contacted-table-body">
+                                <tr class="empty-state">
+                                    <td colspan="4">
+                                        <div class="empty-content">
+                                            <i data-lucide="message-square-dashed"></i>
+                                            <p>Nenhum cliente contatado ainda.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </section>
@@ -211,11 +334,63 @@
         </main>
     </div>
 
+    <!-- Client Profile Modal -->
+    <div id="client-modal" class="modal">
+        <div class="modal-content fade-in">
+            <header class="modal-header">
+                <div class="header-info">
+                    <h2 id="modal-client-name">Nome do Cliente</h2>
+                    <span id="modal-client-type" class="status-badge">Tipo</span>
+                </div>
+                <button id="close-modal" class="btn-icon">
+                    <i data-lucide="x"></i>
+                </button>
+            </header>
+
+            <div class="modal-body">
+                <div class="client-details">
+                    <div class="detail-item">
+                        <label>Telefone</label>
+                        <p id="modal-client-phone"></p>
+                    </div>
+                    <div class="detail-item">
+                        <label>Cadastro em</label>
+                        <p id="modal-client-date"></p>
+                    </div>
+                </div>
+
+                <div class="action-section">
+                    <h3>Registrar Ação</h3>
+                    <div class="action-options">
+                        <button class="action-tag" data-action="Chamei e não respondeu">Chamei e não respondeu</button>
+                        <button class="action-tag" data-action="Cliente reativado">Cliente reativado</button>
+                        <button class="action-tag" data-action="Em conversa">Em conversa</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Descrição da Ação</label>
+                        <textarea id="modal-action-desc"
+                            placeholder="Detalhes da conversa ou próxima etapa..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <footer class="modal-footer">
+                <button id="save-client-data" class="btn-primary">
+                    <i data-lucide="save"></i>
+                    Salvar Alterações
+                </button>
+            </footer>
+        </div>
+    </div>
+
     <!-- Notification system -->
     <div id="notification-toast" class="toast"></div>
 
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
     <script>
         // Initialize Lucide icons
