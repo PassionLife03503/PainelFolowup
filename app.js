@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 
     // Try to load cached data
-    const cachedData = localStorage.getItem('passionlife_leads');
+    const cachedData = localStorage.getItem('passionpro_leads');
     if (cachedData) {
         try {
             leadsData = JSON.parse(cachedData);
@@ -49,11 +49,12 @@ document.addEventListener('DOMContentLoaded', () => {
             renderTable();
         } catch (e) {
             console.error('Erro ao carregar cache:', e);
-            localStorage.removeItem('passionlife_leads');
+            localStorage.removeItem('passionpro_leads');
         }
     }
 
     setupEventListeners();
+    initTheme();
     initCharts();
 
     if (leadsData.length > 0) {
@@ -90,14 +91,17 @@ function setupEventListeners() {
             leadsData[leadIndex] = updatedLead;
 
             // Save & Update
-            localStorage.setItem('passionlife_leads', JSON.stringify(leadsData));
+            localStorage.setItem('passionpro_leads', JSON.stringify(leadsData));
 
             // Sync with Supabase (Background)
             saveLeadToSupabase(updatedLead);
             logActionToSupabase(selectedClientId, actionText, description);
 
+            updatedLead.lastActionDate = Date.now(); // Update interaction time
+
             filteredData = filterLeads(); // Keep current filters
             renderTable();
+            updateInsights(); // Refresh alerts
             closeClientModal();
             showNotification('Ação registrada na nuvem!', 'success');
         }
@@ -154,7 +158,7 @@ function setupEventListeners() {
         }
 
         if (confirm('Tem certeza que deseja remover todos os dados da planilha carregada?')) {
-            localStorage.removeItem('passionlife_leads');
+            localStorage.removeItem('passionpro_leads');
             leadsData = [];
             filteredData = [];
             currentPage = 1;
@@ -195,6 +199,36 @@ function setupEventListeners() {
     if (registerForm) {
         registerForm.addEventListener('submit', handleRegister);
     }
+
+    // Theme Toggle
+    const themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', toggleTheme);
+    }
+
+    // Profile Edit Form
+    const profileForm = document.getElementById('profile-edit-form');
+    if (profileForm) {
+        profileForm.addEventListener('submit', handleProfileUpdate);
+    }
+
+    // Add Client Button
+    const addClientBtn = document.getElementById('btn-add-client');
+    if (addClientBtn) {
+        addClientBtn.addEventListener('click', openAddClientModal);
+    }
+
+    // Add Client Form
+    const addClientForm = document.getElementById('add-client-form');
+    if (addClientForm) {
+        addClientForm.addEventListener('submit', handleAddClient);
+    }
+
+    // Edit Client Button
+    const editClientBtn = document.getElementById('btn-edit-client');
+    if (editClientBtn) {
+        editClientBtn.addEventListener('click', toggleEditClientMode);
+    }
 }
 
 function handleFileUpload(e) {
@@ -212,7 +246,7 @@ function handleFileUpload(e) {
         leadsData = processLeadsData(rawData);
         filteredData = [...leadsData];
 
-        localStorage.setItem('passionlife_leads', JSON.stringify(leadsData));
+        localStorage.setItem('passionpro_leads', JSON.stringify(leadsData));
 
         // Sync with Supabase (Upload all)
         leadsData.forEach(async (lead) => {
@@ -244,6 +278,7 @@ function processLeadsData(data) {
             proximaAcao: 'Analisar perfil para reativação',
             telefone: rawPhone,
             lastAction: '', // Chamei e não respondeu, etc.
+            lastActionDate: (item['DATA DE CADASTRO'] instanceof Date) ? item['DATA DE CADASTRO'].getTime() : Date.now(),
             details: '',     // Descrição detalhada
             isMessaged: false // Novo: rastreia se o WhatsApp foi clicado
         };
@@ -298,7 +333,7 @@ function renderTable() {
     }
 
     tableBody.innerHTML = pageData.map(lead => `
-        <tr class="fade-in" data-client-id="${lead.id}" onclick="openClientModal(${lead.id})">
+        <tr class="fade-in ${isInactive(lead) ? 'row-alert' : ''}" data-client-id="${lead.id}" onclick="openClientModal(${lead.id})">
             <td>
                 <input type="checkbox" class="manual-check" 
                     ${lead.isMessaged ? 'checked' : ''} 
@@ -394,7 +429,7 @@ function generateWhatsAppLink(phone, name) {
     // Pega apenas o primeiro nome
     const firstName = name.split(' ')[0];
 
-    const message = encodeURIComponent(`Olá ${firstName}, tudo bem? Sou da PassionLife e estou entrando em contato para conversarmos sobre novos modelos!`);
+    const message = encodeURIComponent(`Olá ${firstName}, tudo bem? Sou da PassionPro e estou entrando em contato para conversarmos sobre novos modelos!`);
     return `https://wa.me/${cleanPhone}?text=${message}`;
 }
 
@@ -404,7 +439,39 @@ function updateStats() {
     countReativados.textContent = leadsData.filter(l => l.status.includes('EXCLUSIVA')).length;
     countFechados.textContent = leadsData.filter(l => l.status.includes('USO')).length;
     updateCharts();
+    updateInsights();
 }
+
+function updateInsights() {
+    const insightsContainer = document.getElementById('daily-insights');
+    const summaryText = document.getElementById('reactivations-summary');
+
+    const fifteenDaysAgo = Date.now() - (15 * 24 * 60 * 60 * 1000);
+
+    // Filtra leads parados há mais de 15 dias
+    const inactiveLeads = leadsData.filter(lead => {
+        const interactionDate = lead.lastActionDate || 0;
+        return interactionDate < fifteenDaysAgo;
+    });
+
+    if (inactiveLeads.length > 0) {
+        insightsContainer.style.display = 'block';
+        summaryText.innerHTML = `📌 “Você tem ${inactiveLeads.length} clientes para reativar hoje”`;
+    } else {
+        insightsContainer.style.display = 'none';
+    }
+}
+
+window.filterInactiveLeads = function () {
+    const fifteenDaysAgo = Date.now() - (15 * 24 * 60 * 60 * 1000);
+    filteredData = leadsData.filter(lead => {
+        const interactionDate = lead.lastActionDate || 0;
+        return interactionDate < fifteenDaysAgo;
+    });
+    currentPage = 1;
+    renderTable();
+    showNotification(`Mostrando ${filteredData.length} clientes inativos`, 'success');
+};
 
 function switchSection(sectionId) {
     navItems.forEach(nav => nav.classList.toggle('active', nav.getAttribute('data-section') === sectionId));
@@ -412,6 +479,10 @@ function switchSection(sectionId) {
 
     if (sectionId === 'contacted') {
         renderContactedTable();
+    }
+
+    if (sectionId === 'settings') {
+        populateProfileForm();
     }
 
     if (sectionId === 'reports' && charts.status) {
@@ -425,7 +496,7 @@ function switchSection(sectionId) {
 function initCharts() {
     const ctxStatus = document.getElementById('statusDistributionChart').getContext('2d');
     const ctxTrend = document.getElementById('conversionTrendChart').getContext('2d');
-    Chart.defaults.color = '#94a3b8';
+    Chart.defaults.color = '#b8a89a';
     Chart.defaults.font.family = "'Plus Jakarta Sans', sans-serif";
     charts.status = new Chart(ctxStatus, {
         type: 'doughnut',
@@ -452,12 +523,12 @@ function initCharts() {
             datasets: [{
                 label: 'Interações',
                 data: [12, 19, 15, 25, 22, 30],
-                borderColor: '#6366f1',
-                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                borderColor: '#819a9a',
+                backgroundColor: 'rgba(129, 154, 154, 0.1)',
                 fill: true,
                 tension: 0.4,
                 pointRadius: 4,
-                pointBackgroundColor: '#6366f1'
+                pointBackgroundColor: '#819a9a'
             }]
         },
         options: {
@@ -504,6 +575,14 @@ function openClientModal(clientId) {
         tag.classList.toggle('selected', tag.getAttribute('data-action') === lead.lastAction);
     });
     document.getElementById('modal-action-desc').value = lead.details || '';
+
+    // Preenche campos de visualização
+    document.getElementById('modal-client-name-display').textContent = lead.nome;
+    document.getElementById('modal-client-email').textContent = lead.email || 'Não informado';
+
+    // Modo de visualização ativo por padrão
+    document.getElementById('client-view-mode').style.display = 'block';
+    document.getElementById('client-edit-mode').style.display = 'none';
 
     clientModal.classList.add('active');
 }
@@ -585,7 +664,7 @@ window.toggleMessaged = async function (event, clientId) {
         leadsData[leadIndex].isMessaged = !leadsData[leadIndex].isMessaged;
         const updatedLead = leadsData[leadIndex];
 
-        localStorage.setItem('passionlife_leads', JSON.stringify(leadsData));
+        localStorage.setItem('passionpro_leads', JSON.stringify(leadsData));
 
         // Sync with Supabase
         saveLeadToSupabase(updatedLead);
@@ -624,42 +703,153 @@ window.switchLoginTab = function (tab) {
 }
 
 function checkAuth() {
-    const session = localStorage.getItem('passionlife_session');
-    if (session) {
-        const user = JSON.parse(session);
-        showApp(user);
-        loadLeadsFromSupabase(); // Sincroniza dados da nuvem ao abrir o app
-    } else {
+    _supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+            // Buscamos o perfil estendido (role) na tabela vendedoras
+            loadProfileAndShowApp(session.user);
+        } else {
+            showLogin();
+        }
+    });
+
+    // Escuta mudanças de auth (login/logout)
+    _supabase.auth.onAuthStateChange((_event, session) => {
+        if (!session) showLogin();
+    });
+}
+
+async function loadProfileAndShowApp(authUser) {
+    try {
+        const { data: profile, error } = await _supabase
+            .from('vendedoras')
+            .select('*')
+            .eq('id', authUser.id)
+            .single();
+
+        if (error || !profile) {
+            // Caso o perfil não exista (erro de sync), tratamos
+            console.error('Perfil não encontrado no banco de dados');
+            await _supabase.auth.signOut(); // Faz logout silencioso
+            showLogin();
+            showNotification('Erro: Perfil não encontrado. Entre em contato com o suporte.', 'error');
+            return;
+        }
+
+        localStorage.setItem('passionpro_session', JSON.stringify(profile));
+        showApp(profile);
+        loadLeadsFromSupabase();
+    } catch (e) {
+        console.error('Erro ao carregar perfil:', e);
         showLogin();
+        showNotification('Erro ao carregar perfil: ' + e.message, 'error');
     }
 }
 
 async function handleLogin(e) {
     e.preventDefault();
-    const identifier = document.getElementById('login-identifier').value.toLowerCase();
-    const passIn = document.getElementById('login-password').value;
+    const email = document.getElementById('login-identifier').value.toLowerCase();
+    const password = document.getElementById('login-password').value;
     const errorMsg = document.getElementById('login-error');
 
     try {
-        const { data, error } = await _supabase
-            .from('vendedoras')
-            .select('*')
-            .or(`email.eq.${identifier},phone.eq.${identifier}`)
-            .eq('password', passIn)
-            .single();
+        // Tenta fazer login normalmente
+        const { data, error } = await _supabase.auth.signInWithPassword({
+            email: email,
+            password: password,
+        });
 
-        if (error || !data) {
+        if (error) {
+            // Se falhar, tenta migrar usuário antigo
+            console.log('Login falhou, tentando migrar usuário antigo...');
+            const migrated = await migrateOldUser(email, password);
+
+            if (migrated) {
+                // Tenta login novamente após migração
+                const { data: retryData, error: retryError } = await _supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password,
+                });
+
+                if (retryError) {
+                    errorMsg.textContent = "Erro ao fazer login após migração";
+                    errorMsg.classList.add('active');
+                    return;
+                }
+
+                errorMsg.classList.remove('active');
+                loadProfileAndShowApp(retryData.user);
+                showNotification('Conta migrada com sucesso!', 'success');
+                return;
+            }
+
+            errorMsg.textContent = "E-mail ou senha incorretos";
             errorMsg.classList.add('active');
             return;
         }
 
-        localStorage.setItem('passionlife_session', JSON.stringify(data));
         errorMsg.classList.remove('active');
-        showApp(data);
-        loadLeadsFromSupabase(); // Carrega dados da nuvem
+        loadProfileAndShowApp(data.user);
     } catch (e) {
         console.error('Erro no login:', e);
+        errorMsg.textContent = "Erro ao fazer login: " + e.message;
         errorMsg.classList.add('active');
+    }
+}
+
+// Função para migrar usuários antigos do sistema legado
+async function migrateOldUser(email, password) {
+    try {
+        // Busca o usuário na tabela vendedoras (sistema antigo)
+        const { data: oldUser, error: searchError } = await _supabase
+            .from('vendedoras')
+            .select('*')
+            .eq('email', email)
+            .maybeSingle();
+
+        if (searchError || !oldUser) {
+            console.log('Usuário não encontrado na tabela vendedoras');
+            return false;
+        }
+
+        // Verifica se a senha corresponde (sistema antigo armazenava em texto plano)
+        if (oldUser.password !== password) {
+            console.log('Senha não corresponde');
+            return false;
+        }
+
+        console.log('Usuário antigo encontrado, criando conta no Auth...');
+
+        // Cria o usuário no Supabase Auth
+        const { data: newAuthUser, error: signUpError } = await _supabase.auth.signUp({
+            email: email,
+            password: password,
+        });
+
+        if (signUpError) {
+            console.error('Erro ao criar conta no Auth:', signUpError);
+            return false;
+        }
+
+        console.log('Conta criada no Auth, atualizando perfil...');
+
+        // Atualiza o registro antigo com o novo ID do Auth
+        const { error: updateError } = await _supabase
+            .from('vendedoras')
+            .update({
+                id: newAuthUser.user.id,
+                password: null // Remove a senha em texto plano
+            })
+            .eq('email', email);
+
+        if (updateError) {
+            console.error('Erro ao atualizar perfil:', updateError);
+            // Mesmo se falhar o update, a conta Auth foi criada
+        }
+
+        return true;
+    } catch (e) {
+        console.error('Erro na migração:', e);
+        return false;
     }
 }
 
@@ -667,16 +857,33 @@ window.handleRegister = async function (e) {
     e.preventDefault();
     const name = document.getElementById('reg-name').value;
     const email = document.getElementById('reg-email').value.toLowerCase();
-    const phone = document.getElementById('reg-phone').value;
     const password = document.getElementById('reg-password').value;
+    const phone = document.getElementById('reg-phone').value;
     const successMsg = document.getElementById('reg-success');
 
     try {
-        const { error } = await _supabase
-            .from('vendedoras')
-            .insert([{ name, email, phone, password, role: 'Vendedora' }]);
+        // 1. Criar usuário no Auth do Supabase
+        const { data, error } = await _supabase.auth.signUp({
+            email: email,
+            password: password,
+        });
 
         if (error) throw error;
+
+        // 2. Criar perfil na nossa tabela vendedoras vinculando o ID
+        if (data.user) {
+            const { error: profileError } = await _supabase
+                .from('vendedoras')
+                .insert([{
+                    id: data.user.id,
+                    name,
+                    email,
+                    phone,
+                    role: 'vendedora' // Padrão: Vendedora
+                }]);
+
+            if (profileError) throw profileError;
+        }
 
         successMsg.style.display = 'block';
         setTimeout(() => {
@@ -693,9 +900,10 @@ function showApp(user) {
     document.getElementById('main-app').style.display = 'flex';
 
     document.getElementById('display-user-name').textContent = user.name;
-    document.getElementById('display-user-role').textContent = user.role;
+    document.getElementById('display-user-role').textContent = user.role.toUpperCase();
     document.getElementById('display-user-avatar').textContent = user.name.substring(0, 2).toUpperCase();
 
+    applyRolePermissions(user.role);
     lucide.createIcons();
 }
 
@@ -704,9 +912,24 @@ function showLogin() {
     document.getElementById('main-app').style.display = 'none';
 }
 
-function logout() {
+function applyRolePermissions(role) {
+    const clearDataBtn = document.getElementById('clear-data');
+    const reportsSection = document.querySelector('[data-section="reports"]');
+
+    if (role === 'vendedora') {
+        if (clearDataBtn) clearDataBtn.style.display = 'none';
+        // Vendedoras talvez não devam ver relatórios globais? 
+        // Se quiser bloquear, descomente:
+        // if (reportsSection) reportsSection.style.display = 'none';
+    } else {
+        if (clearDataBtn) clearDataBtn.style.display = 'flex';
+    }
+}
+
+async function logout() {
     if (confirm('Deseja realmente sair do sistema?')) {
-        localStorage.removeItem('passionlife_session');
+        await _supabase.auth.signOut();
+        localStorage.removeItem('passionpro_session');
         location.reload();
     }
 }
@@ -714,34 +937,25 @@ function logout() {
 // --- SUPABASE DATA MANAGEMENT ---
 
 async function loadLeadsFromSupabase() {
-    const session = JSON.parse(localStorage.getItem('passionlife_session'));
+    const { data: { session } } = await _supabase.auth.getSession();
     if (!session) return;
 
     try {
         const { data, error } = await _supabase
             .from('leads_followup')
             .select('*')
-            .eq('vendedora_id', session.id) // FILTRO: Só vê o que é dela
             .order('id', { ascending: false });
 
-        if (error) throw error;
+        leadsData = data || [];
+        filteredData = [...leadsData];
 
         // Atualiza status visual
         document.getElementById('db-status-dot').style.background = '#10b981';
         document.getElementById('db-status-text').textContent = 'Cloud Online';
 
-        if (data && data.length > 0) {
-            leadsData = data;
-            filteredData = [...leadsData];
-            updateFilterOptions();
-            updateStats();
-            renderTable();
-        } else {
-            // Se não houver nada na nuvem, limpa a tabela local
-            leadsData = [];
-            filteredData = [];
-            renderTable();
-        }
+        updateFilterOptions();
+        updateStats();
+        renderTable();
     } catch (e) {
         console.error('Erro ao carregar leads da nuvem:', e.message);
         document.getElementById('db-status-dot').style.background = '#ef4444';
@@ -750,12 +964,12 @@ async function loadLeadsFromSupabase() {
 }
 
 async function saveLeadToSupabase(lead) {
-    const session = JSON.parse(localStorage.getItem('passionlife_session'));
+    const { data: { session } } = await _supabase.auth.getSession();
     if (!session) return;
 
     try {
         // Vincula o lead à vendedora antes de salvar
-        const leadToSync = { ...lead, vendedora_id: session.id };
+        const leadToSync = { ...lead, vendedora_id: session.user.id };
 
         const { error } = await _supabase
             .from('leads_followup')
@@ -768,15 +982,17 @@ async function saveLeadToSupabase(lead) {
 }
 
 async function logActionToSupabase(clientId, action, details) {
-    const session = JSON.parse(localStorage.getItem('passionlife_session'));
+    const { data: { session } } = await _supabase.auth.getSession();
     if (!session) return;
+
+    const profile = JSON.parse(localStorage.getItem('passionpro_session'));
 
     try {
         const { error } = await _supabase
             .from('logs_acoes')
             .insert([{
-                vendedora_id: session.id,
-                vendedora_nome: session.name,
+                vendedora_id: session.user.id,
+                vendedora_nome: profile?.name || 'Usuário',
                 client_id: clientId,
                 acao: action,
                 detalhes: details,
@@ -786,5 +1002,253 @@ async function logActionToSupabase(clientId, action, details) {
         if (error) throw error;
     } catch (e) {
         console.error('Erro ao logar ação na nuvem:', e.message);
+    }
+}
+
+// --- THEME MANAGEMENT ---
+
+function initTheme() {
+    const savedTheme = localStorage.getItem('passionpro_theme') || 'dark';
+    if (savedTheme === 'light') {
+        document.body.classList.add('light-theme');
+        updateThemeUI('light');
+    }
+}
+
+function toggleTheme() {
+    const isLight = document.body.classList.toggle('light-theme');
+    const theme = isLight ? 'light' : 'dark';
+    localStorage.setItem('passionpro_theme', theme);
+    updateThemeUI(theme);
+
+    // Update charts with new theme colors
+    updateChartsTheme();
+}
+
+function updateThemeUI(theme) {
+    const icon = document.getElementById('theme-icon');
+    const text = document.getElementById('theme-text');
+    if (theme === 'light') {
+        icon.setAttribute('data-lucide', 'sun');
+        text.textContent = 'Modo Claro';
+    } else {
+        icon.setAttribute('data-lucide', 'moon');
+        text.textContent = 'Modo Escuro';
+    }
+    lucide.createIcons();
+}
+
+function updateChartsTheme() {
+    const isLight = document.body.classList.contains('light-theme');
+    const textColor = isLight ? '#1d1d1f' : '#b8a89a';
+    const accentColor = isLight ? '#000000' : '#819a9a';
+
+    Chart.defaults.color = textColor;
+
+    if (charts.status) {
+        charts.status.options.plugins.legend.labels.color = textColor;
+        charts.status.update();
+    }
+
+    if (charts.trend) {
+        charts.trend.options.scales.x.ticks.color = textColor;
+        charts.trend.options.scales.y.ticks.color = textColor;
+        charts.trend.data.datasets[0].borderColor = accentColor;
+        charts.trend.data.datasets[0].pointBackgroundColor = accentColor;
+        charts.trend.update();
+    }
+}
+
+function isInactive(lead) {
+    const fifteenDaysAgo = Date.now() - (15 * 24 * 60 * 60 * 1000);
+    return lead.lastActionDate < fifteenDaysAgo;
+}
+
+// --- ADD CLIENT MODAL ---
+
+function openAddClientModal() {
+    document.getElementById('add-client-modal').classList.add('active');
+    lucide.createIcons();
+}
+
+window.closeAddClientModal = function () {
+    document.getElementById('add-client-modal').classList.remove('active');
+    document.getElementById('add-client-form').reset();
+}
+
+async function handleAddClient(e) {
+    e.preventDefault();
+
+    const name = document.getElementById('new-client-name').value;
+    const phone = document.getElementById('new-client-phone').value;
+    const email = document.getElementById('new-client-email').value;
+    const status = document.getElementById('new-client-status').value;
+    const notes = document.getElementById('new-client-notes').value;
+
+    // Limpa o telefone para usar como ID
+    const phoneId = phone.replace(/\D/g, '');
+
+    const newLead = {
+        id: phoneId ? parseInt(phoneId) : Date.now(),
+        nome: name,
+        telefone: phone,
+        email: email || 'N/A',
+        dataCadastro: new Date().toLocaleDateString('pt-BR'),
+        status: status,
+        proximaAcao: 'Primeiro contato',
+        lastAction: notes || 'Cliente cadastrado manualmente',
+        lastActionDate: Date.now(),
+        details: notes || '',
+        isMessaged: false
+    };
+
+    // Adiciona ao array local
+    leadsData.unshift(newLead);
+    filteredData = filterLeads();
+
+    // Salva no Supabase
+    await saveLeadToSupabase(newLead);
+
+    // Atualiza a UI
+    updateFilterOptions();
+    updateStats();
+    renderTable();
+
+    closeAddClientModal();
+    showNotification(`Cliente ${name} cadastrado com sucesso!`, 'success');
+}
+
+// --- EDIT CLIENT ---
+
+function toggleEditClientMode() {
+    const viewMode = document.getElementById('client-view-mode');
+    const editMode = document.getElementById('client-edit-mode');
+    const lead = leadsData.find(l => l.id === selectedClientId);
+
+    if (!lead) return;
+
+    // Preenche os campos de edição
+    document.getElementById('edit-client-name').value = lead.nome;
+    document.getElementById('edit-client-phone').value = lead.telefone;
+    document.getElementById('edit-client-email').value = lead.email === 'N/A' ? '' : lead.email;
+    document.getElementById('edit-client-status').value = lead.status;
+
+    // Alterna para modo de edição
+    viewMode.style.display = 'none';
+    editMode.style.display = 'block';
+    lucide.createIcons();
+}
+
+window.cancelEditClient = function () {
+    document.getElementById('client-view-mode').style.display = 'block';
+    document.getElementById('client-edit-mode').style.display = 'none';
+}
+
+window.saveClientEdit = async function () {
+    const lead = leadsData.find(l => l.id === selectedClientId);
+    if (!lead) return;
+
+    const newName = document.getElementById('edit-client-name').value;
+    const newPhone = document.getElementById('edit-client-phone').value;
+    const newEmail = document.getElementById('edit-client-email').value;
+    const newStatus = document.getElementById('edit-client-status').value;
+
+    // Atualiza o objeto
+    lead.nome = newName;
+    lead.telefone = newPhone;
+    lead.email = newEmail || 'N/A';
+    lead.status = newStatus;
+
+    // Atualiza ID se o telefone mudou
+    const newPhoneId = newPhone.replace(/\D/g, '');
+    if (newPhoneId && newPhoneId !== lead.id.toString()) {
+        const oldId = lead.id;
+        lead.id = parseInt(newPhoneId);
+
+        // Remove o antigo e adiciona com novo ID
+        leadsData = leadsData.filter(l => l.id !== oldId);
+        leadsData.push(lead);
+    }
+
+    // Salva no Supabase
+    await saveLeadToSupabase(lead);
+
+    // Atualiza UI
+    filteredData = filterLeads();
+    updateFilterOptions();
+    updateStats();
+    renderTable();
+
+    // Atualiza o modal
+    document.getElementById('modal-client-name').textContent = newName;
+    document.getElementById('modal-client-name-display').textContent = newName;
+    document.getElementById('modal-client-phone').textContent = newPhone;
+    document.getElementById('modal-client-email').textContent = newEmail || 'Não informado';
+    document.getElementById('modal-client-type').textContent = newStatus;
+    document.getElementById('modal-client-type').className = `status-badge status-${newStatus.toLowerCase().replace(' ', '-')}`;
+
+    // Volta ao modo visualização
+    cancelEditClient();
+    showNotification('Cadastro atualizado com sucesso!', 'success');
+    lucide.createIcons();
+}
+
+// --- PROFILE MANAGEMENT ---
+
+function populateProfileForm() {
+    const session = JSON.parse(localStorage.getItem('passionpro_session'));
+    if (!session) return;
+
+    document.getElementById('edit-name').value = session.name;
+    document.getElementById('edit-email').value = session.email;
+    document.getElementById('edit-phone').value = session.phone || '';
+    document.getElementById('edit-password').value = ''; // Don't show password
+
+    // Update settings view
+    document.getElementById('settings-user-name').textContent = session.name;
+    document.getElementById('settings-user-role').textContent = session.role;
+    document.getElementById('settings-avatar').textContent = session.name.substring(0, 2).toUpperCase();
+    const userIdDisplay = document.getElementById('settings-user-id');
+    if (userIdDisplay) userIdDisplay.textContent = `#${session.id.toString().padStart(3, '0')}`;
+}
+
+async function handleProfileUpdate(e) {
+    e.preventDefault();
+    const session = JSON.parse(localStorage.getItem('passionpro_session'));
+    if (!session) return;
+
+    const newName = document.getElementById('edit-name').value;
+    const newEmail = document.getElementById('edit-email').value;
+    const newPhone = document.getElementById('edit-phone').value;
+    const newPassword = document.getElementById('edit-password').value;
+
+    const updateData = {
+        name: newName,
+        email: newEmail,
+        phone: newPhone
+    };
+
+    if (newPassword) {
+        updateData.password = newPassword;
+    }
+
+    try {
+        const { data, error } = await _supabase
+            .from('vendedoras')
+            .update(updateData)
+            .eq('id', session.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        // Update session and UI
+        localStorage.setItem('passionpro_session', JSON.stringify(data));
+        showApp(data); // Updates sidebar
+        populateProfileForm(); // Updates settings view
+        showNotification('Perfil atualizado com sucesso!', 'success');
+    } catch (e) {
+        console.error('Erro ao atualizar perfil:', e.message);
+        showNotification('Erro ao atualizar perfil: ' + e.message, 'error');
     }
 }
