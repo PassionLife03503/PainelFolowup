@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel Follow-up | PassionLife</title>
+    <title>Painel Follow-up | PassionPro</title>
     <link rel="stylesheet" href="styles.css">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,7 +23,7 @@
     <div id="login-screen" class="login-overlay">
         <div class="login-card fade-in">
             <div class="login-logo">
-                <span class="logo-text">PASSION<span class="logo-accent">LIFE</span></span>
+                <span class="logo-text">PASSION<span class="logo-accent">PRO</span></span>
                 <p>VIVA COM PASSION</p>
             </div>
 
@@ -88,7 +88,7 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="logo-container">
-                <span class="logo-text">Passion<span class="logo-accent">Life</span></span>
+                <span class="logo-text">Passion<span class="logo-accent">Pro</span></span>
             </div>
             <nav class="nav-menu">
                 <a href="#" class="nav-item active" data-section="follow-up">
@@ -109,6 +109,11 @@
                 </a>
             </nav>
             <div class="sidebar-footer">
+                <button id="theme-toggle" class="btn-icon"
+                    style="margin-bottom: 1rem; width: 100%; justify-content: flex-start; gap: 10px; padding: 0.8rem; border-radius: 12px; color: var(--text-muted);">
+                    <i data-lucide="moon" id="theme-icon"></i>
+                    <span id="theme-text" style="font-size: 0.9rem;">Modo Escuro</span>
+                </button>
                 <div class="user-profile">
                     <div class="avatar" id="display-user-avatar">VP</div>
                     <div class="user-info">
@@ -151,6 +156,20 @@
                         </label>
                     </div>
                 </header>
+
+                <!-- Daily Insights & Alerts -->
+                <div class="insights-container fade-in" id="daily-insights" style="display: none;">
+                    <div class="insight-card alert">
+                        <div class="insight-icon"><i data-lucide="alert-circle"></i></div>
+                        <div class="insight-content">
+                            <h3 id="reactivations-summary">📌 Carregando tarefas do dia...</h3>
+                            <p>Clientes sem interação há mais de 15 dias precisam de atenção.</p>
+                        </div>
+                        <div class="insight-action">
+                            <button class="btn-primary btn-sm" onclick="filterInactiveLeads()">Ver Clientes</button>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Stats Overview -->
                 <div class="stats-grid">
@@ -202,6 +221,10 @@
                                 <option value="Fechado">Fechado</option>
                             </select>
                         </div>
+                        <button id="btn-add-client" class="btn-primary" style="margin-left: auto;">
+                            <i data-lucide="user-plus"></i>
+                            Adicionar Cliente
+                        </button>
                     </div>
 
                     <div class="responsive-table">
@@ -323,15 +346,129 @@
             <section id="section-settings" class="content-section">
                 <header class="top-header">
                     <div class="header-title">
-                        <h1>Configurações</h1>
-                        <p>Personalize as opções do seu painel.</p>
+                        <h1>Meu Perfil</h1>
+                        <p>Gerencie suas informações pessoais e configurações da conta.</p>
                     </div>
                 </header>
-                <div class="table-container" style="padding: 2rem; color: var(--text-muted);">
-                    As configurações de conta e sistema estarão disponíveis em breve.
+
+                <div class="settings-grid">
+                    <!-- User Info Card -->
+                    <div class="table-container profile-card fade-in">
+                        <div class="profile-header">
+                            <div class="profile-avatar-large" id="settings-avatar">VP</div>
+                            <div class="profile-meta">
+                                <h2 id="settings-user-name">Vendas Passion</h2>
+                                <span class="status-badge" id="settings-user-role">Vendedora</span>
+                            </div>
+                        </div>
+
+                        <form id="profile-edit-form" class="profile-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Nome Completo</label>
+                                    <input type="text" id="edit-name" placeholder="Nome Completo" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>E-mail</label>
+                                    <input type="email" id="edit-email" placeholder="email@exemplo.com" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Telefone / WhatsApp</label>
+                                    <input type="tel" id="edit-phone" placeholder="11999999999" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Nova Senha (opcional)</label>
+                                    <input type="password" id="edit-password" placeholder="••••••••">
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn-primary">
+                                    <i data-lucide="save"></i>
+                                    Atualizar Perfil
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- App Preferences -->
+                    <div class="table-container info-card fade-in">
+                        <div class="info-header">
+                            <i data-lucide="shield-check"></i>
+                            <h3>Segurança e Preferências</h3>
+                        </div>
+                        <div class="info-content">
+                            <p>Sua conta está vinculada à unidade matriz da <strong>PassionPro</strong>.</p>
+                            <div class="preference-item">
+                                <span>Status da Conta</span>
+                                <span class="status-badge status-reativado">Ativa</span>
+                            </div>
+                            <div class="preference-item">
+                                <span>Acesso Cloud</span>
+                                <span id="settings-db-status" class="status-badge status-novo">Sincronizado</span>
+                            </div>
+                            <div class="preference-item">
+                                <span>ID da Vendedora</span>
+                                <code id="settings-user-id" style="color: var(--accent-primary);">#000</code>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>
+    </div>
+
+    <!-- Modal: Adicionar Cliente -->
+    <div class="modal" id="add-client-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="header-info">
+                    <h2>Adicionar Novo Cliente</h2>
+                    <p style="color: var(--text-muted); margin-top: 0.5rem;">Cadastre um novo lead manualmente</p>
+                </div>
+                <button class="btn-icon" onclick="closeAddClientModal()">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="add-client-form">
+                    <div class="form-group">
+                        <label>Nome do Cliente *</label>
+                        <input type="text" id="new-client-name" placeholder="Digite o nome completo" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Telefone/WhatsApp *</label>
+                            <input type="tel" id="new-client-phone" placeholder="(00) 00000-0000" required>
+                        </div>
+                        <div class="form-group">
+                            <label>E-mail (opcional)</label>
+                            <input type="email" id="new-client-email" placeholder="email@exemplo.com">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Status Inicial</label>
+                        <select id="new-client-status" class="form-select">
+                            <option value="Novo lead">Novo Lead</option>
+                            <option value="Em conversa">Em Conversa</option>
+                            <option value="Cliente antigo">Cliente Antigo</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Observações (opcional)</label>
+                        <textarea id="new-client-notes" placeholder="Anotações sobre o cliente..." rows="3"></textarea>
+                    </div>
+                    <div class="form-actions" style="justify-content: space-between;">
+                        <button type="button" class="btn-secondary" onclick="closeAddClientModal()">Cancelar</button>
+                        <button type="submit" class="btn-primary">
+                            <i data-lucide="user-plus"></i>
+                            Cadastrar Cliente
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <!-- Client Profile Modal -->
@@ -342,20 +479,70 @@
                     <h2 id="modal-client-name">Nome do Cliente</h2>
                     <span id="modal-client-type" class="status-badge">Tipo</span>
                 </div>
-                <button id="close-modal" class="btn-icon">
-                    <i data-lucide="x"></i>
-                </button>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button id="btn-edit-client" class="btn-icon" title="Editar Cadastro">
+                        <i data-lucide="edit-2"></i>
+                    </button>
+                    <button id="close-modal" class="btn-icon">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
             </header>
 
             <div class="modal-body">
-                <div class="client-details">
+                <!-- Client Info - View Mode -->
+                <div class="client-details" id="client-view-mode">
+                    <div class="detail-item">
+                        <label>Nome</label>
+                        <p id="modal-client-name-display"></p>
+                    </div>
                     <div class="detail-item">
                         <label>Telefone</label>
                         <p id="modal-client-phone"></p>
                     </div>
                     <div class="detail-item">
+                        <label>E-mail</label>
+                        <p id="modal-client-email"></p>
+                    </div>
+                    <div class="detail-item">
                         <label>Cadastro em</label>
                         <p id="modal-client-date"></p>
+                    </div>
+                </div>
+
+                <!-- Client Info - Edit Mode -->
+                <div class="client-details" id="client-edit-mode" style="display: none;">
+                    <div class="form-group">
+                        <label>Nome do Cliente</label>
+                        <input type="text" id="edit-client-name" placeholder="Nome completo">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Telefone/WhatsApp</label>
+                            <input type="tel" id="edit-client-phone" placeholder="(00) 00000-0000">
+                        </div>
+                        <div class="form-group">
+                            <label>E-mail</label>
+                            <input type="email" id="edit-client-email" placeholder="email@exemplo.com">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="edit-client-status">
+                            <option value="Novo lead">Novo Lead</option>
+                            <option value="Em conversa">Em Conversa</option>
+                            <option value="Sumiu">Sumiu</option>
+                            <option value="Cliente antigo">Cliente Antigo</option>
+                            <option value="Reativado">Reativado</option>
+                            <option value="Fechado">Fechado</option>
+                        </select>
+                    </div>
+                    <div class="form-actions" style="justify-content: flex-end; margin-top: 1rem;">
+                        <button type="button" class="btn-secondary" onclick="cancelEditClient()">Cancelar</button>
+                        <button type="button" class="btn-primary" onclick="saveClientEdit()">
+                            <i data-lucide="save"></i>
+                            Salvar Alterações
+                        </button>
                     </div>
                 </div>
 
