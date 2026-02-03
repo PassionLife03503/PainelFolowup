@@ -362,6 +362,36 @@
                             </div>
                         </div>
 
+                        <!-- Profile Photo Section -->
+                        <div class="profile-photo-section"
+                            style="margin-bottom: 2rem; padding: 1.5rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px;">
+                            <h3 style="font-size: 1rem; margin-bottom: 1rem; color: var(--text-main);">Foto de Perfil
+                            </h3>
+                            <div style="display: flex; align-items: center; gap: 1.5rem;">
+                                <div id="profile-avatar-preview" class="avatar"
+                                    style="width: 80px; height: 80px; font-size: 2rem; flex-shrink: 0;">
+                                    VP
+                                </div>
+                                <div style="flex: 1;">
+                                    <input type="file" id="profile-photo-input" accept="image/*" style="display: none;">
+                                    <button type="button" class="btn-primary"
+                                        onclick="document.getElementById('profile-photo-input').click()"
+                                        style="margin-bottom: 0.5rem;">
+                                        <i data-lucide="camera"></i>
+                                        Alterar Foto
+                                    </button>
+                                    <button type="button" class="btn-secondary" id="remove-photo-btn"
+                                        style="margin-left: 0.5rem; display: none;">
+                                        <i data-lucide="trash-2"></i>
+                                        Remover
+                                    </button>
+                                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">
+                                        JPG, PNG ou GIF (máx. 2MB)
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
                         <form id="profile-edit-form" class="profile-form">
                             <div class="form-row">
                                 <div class="form-group">
