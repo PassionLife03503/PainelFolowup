@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Follow-up | PassionLife</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SheetJS for Excel parsing -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+</head>
+
+<body class="dark-theme">
+    <div class="app-container">
+        <!-- Mobile Menu Toggle -->
+        <button id="mobile-menu-toggle" class="mobile-toggle">
+            <i data-lucide="menu"></i>
+        </button>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo-container">
+                <span class="logo-text">Passion<span class="logo-accent">Life</span></span>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" data-section="follow-up">
+                    <i data-lucide="users"></i>
+                    <span>Follow-up</span>
+                </a>
+                <a href="#" class="nav-item" data-section="reports">
+                    <i data-lucide="bar-chart-3"></i>
+                    <span>Relatórios</span>
+                </a>
+                <a href="#" class="nav-item" data-section="settings">
+                    <i data-lucide="settings"></i>
+                    <span>Configurações</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-profile">
+                    <div class="avatar">VP</div>
+                    <div class="user-info">
+                        <span class="user-name">Vendas Passion</span>
+                        <span class="user-role">Equipe Comercial</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Follow-up Section -->
+            <section id="section-follow-up" class="content-section active">
+                <header class="top-header">
+                    <div class="header-title">
+                        <h1>Painel de Follow-up</h1>
+                        <p>Gerencie seus leads e reative clientes com eficiência.</p>
+                    </div>
+                    <div class="header-actions">
+                        <label for="excel-upload" class="btn-primary">
+                            <i data-lucide="upload-cloud"></i>
+                            Importar Planilha
+                            <input type="file" id="excel-upload" accept=".xlsx, .xls, .csv" hidden>
+                        </label>
+                    </div>
+                </header>
+
+                <!-- Stats Overview -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon novo"><i data-lucide="user-plus"></i></div>
+                        <div class="stat-data">
+                            <span class="stat-value" id="count-novos">0</span>
+                            <span class="stat-label">Revendedores</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon em-conversa"><i data-lucide="message-circle"></i></div>
+                        <div class="stat-data">
+                            <span class="stat-value" id="count-conversa">0</span>
+                            <span class="stat-label">Lojistas</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon reativado"><i data-lucide="zap"></i></div>
+                        <div class="stat-data">
+                            <span class="stat-value" id="count-reativados">0</span>
+                            <span class="stat-label">Cidade Exclusiva</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon fechado"><i data-lucide="check-circle"></i></div>
+                        <div class="stat-data">
+                            <span class="stat-value" id="count-fechados">0</span>
+                            <span class="stat-label">Uso Próprio</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table Section -->
+                <div class="table-container fade-in">
+                    <div class="table-header">
+                        <div class="search-box">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="search-input" placeholder="Buscar cliente...">
+                        </div>
+                        <div class="filter-box">
+                            <select id="status-filter">
+                                <option value="all">Todos os Status</option>
+                                <option value="Novo lead">Novo Lead</option>
+                                <option value="Em conversa">Em Conversa</option>
+                                <option value="Sumiu">Sumiu</option>
+                                <option value="Cliente antigo">Cliente Antigo</option>
+                                <option value="Reativado">Reativado</option>
+                                <option value="Fechado">Fechado</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="responsive-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Nome do Cliente</th>
+                                    <th>Último Contato</th>
+                                    <th>Status</th>
+                                    <th>Próxima Ação</th>
+                                    <th class="text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leads-table-body">
+                                <!-- Data will be injected here -->
+                                <tr class="empty-state">
+                                    <td colspan="5">
+                                        <div class="empty-content">
+                                            <i data-lucide="file-spreadsheet"></i>
+                                            <p>Nenhum dado importado. Carregue uma planilha para começar.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="table-footer">
+                        <div class="page-size-selector">
+                            <span>Mostrar</span>
+                            <select id="page-size">
+                                <option value="10">10</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                            <span>linhas</span>
+                        </div>
+                        <div id="pagination-controls" class="pagination">
+                            <!-- Pagination buttons injected here -->
+                        </div>
+                        <div class="table-info" id="table-info">
+                            Mostrando 0 de 0 leads
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reports Section -->
+            <section id="section-reports" class="content-section">
+                <header class="top-header">
+                    <div class="header-title">
+                        <h1>Relatórios de Performance</h1>
+                        <p>Analise a conversão e o engajamento da sua base.</p>
+                    </div>
+                </header>
+
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3>Distribuição de Status</h3>
+                        <div class="chart-container">
+                            <canvas id="statusDistributionChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Conversão Mensal (Simulado)</h3>
+                        <div class="chart-container">
+                            <canvas id="conversionTrendChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Section (Placeholder) -->
+            <section id="section-settings" class="content-section">
+                <header class="top-header">
+                    <div class="header-title">
+                        <h1>Configurações</h1>
+                        <p>Personalize as opções do seu painel.</p>
+                    </div>
+                </header>
+                <div class="table-container" style="padding: 2rem; color: var(--text-muted);">
+                    As configurações de conta e sistema estarão disponíveis em breve.
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Notification system -->
+    <div id="notification-toast" class="toast"></div>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>
