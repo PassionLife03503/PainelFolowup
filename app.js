@@ -15,6 +15,7 @@ const excelUpload = document.getElementById('excel-upload');
 const tableBody = document.getElementById('leads-table-body');
 const searchInput = document.getElementById('search-input');
 const statusFilter = document.getElementById('status-filter');
+const actionFilter = document.getElementById('action-filter');
 const countNovos = document.getElementById('count-novos');
 const countConversa = document.getElementById('count-conversa');
 const countReativados = document.getElementById('count-reativados');
@@ -105,6 +106,11 @@ function setupEventListeners() {
 
             updatedLead.lastActionDate = Date.now(); // Update interaction time
 
+            // Increment contact count for goals tracking
+            if (actionText) {
+                await incrementContactCount();
+            }
+
             filteredData = filterLeads(); // Keep current filters
             renderTable();
             updateInsights(); // Refresh alerts
@@ -155,7 +161,11 @@ function setupEventListeners() {
         renderTable();
     });
 
-
+    actionFilter.addEventListener('change', () => {
+        currentPage = 1;
+        filteredData = filterLeads();
+        renderTable();
+    });
 
     // Clear Data
     const clearDataBtn = document.getElementById('clear-data');
@@ -347,11 +357,23 @@ function updateFilterOptions() {
 function filterLeads() {
     const searchTerm = searchInput.value.toLowerCase();
     const filterValue = statusFilter.value;
+    const actionValue = actionFilter ? actionFilter.value : 'all';
 
     return leadsData.filter(lead => {
         const matchesSearch = lead.nome.toLowerCase().includes(searchTerm);
         const matchesFilter = filterValue === 'all' || lead.status === filterValue;
-        return matchesSearch && matchesFilter;
+
+        // Action filter logic
+        let matchesAction = true;
+        if (actionValue !== 'all') {
+            if (actionValue === 'sem-acao') {
+                matchesAction = !lead.lastAction || lead.lastAction.trim() === '';
+            } else {
+                matchesAction = lead.lastAction === actionValue;
+            }
+        }
+
+        return matchesSearch && matchesFilter && matchesAction;
     });
 }
 
@@ -608,8 +630,8 @@ window.filterByStatCard = function (element) {
 }
 
 function updateInsights() {
-    const insightsContainer = document.getElementById('daily-insights');
-    const summaryText = document.getElementById('reactivations-summary');
+    const inactiveBadge = document.getElementById('inactive-badge');
+    const inactiveCountText = document.getElementById('inactive-count-text');
 
     const fifteenDaysAgo = Date.now() - (15 * 24 * 60 * 60 * 1000);
 
@@ -620,10 +642,10 @@ function updateInsights() {
     });
 
     if (inactiveLeads.length > 0) {
-        insightsContainer.style.display = 'block';
-        summaryText.innerHTML = `📌 “Você tem ${inactiveLeads.length} clientes para reativar hoje”`;
+        if (inactiveBadge) inactiveBadge.style.display = 'block';
+        if (inactiveCountText) inactiveCountText.textContent = `${inactiveLeads.length} clientes parados há 15 dias`;
     } else {
-        insightsContainer.style.display = 'none';
+        if (inactiveBadge) inactiveBadge.style.display = 'none';
     }
 }
 
@@ -1076,6 +1098,7 @@ function showApp(user) {
     }
 
     applyRolePermissions(user.role);
+    updateGoalsUI(); // Update goals progress
     lucide.createIcons();
 }
 
@@ -1424,18 +1447,17 @@ async function handleProfileUpdate(e) {
     }
 
     try {
-        const { data, error } = await _supabase
-            .from('vendedoras')
+        const { error } = await _supabase
+            .from('cadastros')
             .update(updateData)
-            .eq('id', session.id)
-            .select()
-            .single();
+            .eq('id', session.id);
 
         if (error) throw error;
 
-        // Update session and UI
-        localStorage.setItem('passionpro_session', JSON.stringify(data));
-        showApp(data); // Updates sidebar
+        // Update session locally (since RLS might not return the row)
+        const updatedSession = { ...session, ...updateData };
+        localStorage.setItem('passionpro_session', JSON.stringify(updatedSession));
+        showApp(updatedSession); // Updates sidebar
         populateProfileForm(); // Updates settings view
         showNotification('Perfil atualizado com sucesso!', 'success');
     } catch (e) {
@@ -1485,7 +1507,7 @@ async function handlePhotoUpload(e) {
 
         // Salva URL no perfil
         const { error: updateError } = await _supabase
-            .from('vendedoras')
+            .from('cadastros')
             .update({ avatar_url: publicUrl })
             .eq('id', session.id);
 
@@ -1515,7 +1537,7 @@ async function removeProfilePhoto() {
     try {
         // Remove do banco
         const { error } = await _supabase
-            .from('vendedoras')
+            .from('cadastros')
             .update({ avatar_url: null })
             .eq('id', session.id);
 
@@ -1643,7 +1665,11 @@ function processAdminStats(sellers, leads, logs) {
             totalLeads: sellerLeads.length,
             contactedCount,
             reactivatedCount,
-            lastActivity
+            lastActivity,
+            meta_diaria: seller.meta_diaria,
+            meta_mensal: seller.meta_mensal,
+            contatos_hoje: seller.contatos_hoje,
+            contatos_mes: seller.contatos_mes
         };
     });
 
@@ -1671,19 +1697,20 @@ function renderAdminDashboard(stats) {
     }
 
     gridContainer.innerHTML = stats.sellerStats.map(seller => {
-        // Cálculo básico de "Não responderam" (Ex: Total Leads - Contatados)
-        const notResponded = seller.totalLeads - seller.contactedCount;
+        // Use real goals from database
+        const dailyGoal = seller.meta_diaria || 10;
+        const monthlyGoal = seller.meta_mensal || 200;
+        const dailyCurrent = seller.contatos_hoje || 0;
+        const monthlyCurrent = seller.contatos_mes || 0;
 
-        // Meta (Hardcoded por enquanto)
-        const weeklyGoal = 50;
-        const goalStatus = seller.contactedCount >= weeklyGoal ? 'Meta Atingida' : 'Meta não atingida';
-        const goalClass = seller.contactedCount >= weeklyGoal ? 'atingida' : 'nao-atingida';
+        const dailyPercent = Math.min((dailyCurrent / dailyGoal) * 100, 100);
+        const monthlyPercent = Math.min((monthlyCurrent / monthlyGoal) * 100, 100);
 
-        // Determinar cargo para exibição
-        const displayRole = seller.role === 'admin' ? 'Administrador' : 'Vendedora';
+        const dailyStatus = dailyCurrent >= dailyGoal ? 'Meta Diária ✅' : `${dailyCurrent}/${dailyGoal} hoje`;
+        const monthlyStatus = monthlyCurrent >= monthlyGoal ? 'Meta Mensal ✅' : `${monthlyCurrent}/${monthlyGoal} mês`;
 
         return `
-        <div class="admin-seller-card fade-in">
+        <div class="admin-seller-card fade-in" onclick="openSellerGoalsModal('${seller.id}', '${seller.name}', ${dailyGoal}, ${monthlyGoal}, ${dailyCurrent}, ${monthlyCurrent})" style="cursor: pointer;">
             <div class="seller-header">
                 <div class="seller-avatar" 
                      style="${seller.avatar_url ? `background-image: url(${seller.avatar_url}); background-size: cover; color: transparent;` : ''}">
@@ -1691,28 +1718,176 @@ function renderAdminDashboard(stats) {
                 </div>
                 <div class="seller-info">
                     <h3>${seller.name}</h3>
-                    <p>${displayRole}</p>
+                    <p>Vendedora</p>
                 </div>
             </div>
             
             <div class="seller-metrics">
                 <div class="metric-row">
+                    <span class="metric-label">🔥 Meta Diária:</span>
+                    <span class="metric-value ${dailyCurrent >= dailyGoal ? 'text-success' : ''}">${dailyStatus}</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">📊 Meta Mensal:</span>
+                    <span class="metric-value ${monthlyCurrent >= monthlyGoal ? 'text-success' : ''}">${monthlyStatus}</span>
+                </div>
+                <div class="metric-row">
                     <span class="metric-label">Clientes Reativados:</span>
                     <span class="metric-value text-success">${seller.reactivatedCount}</span>
                 </div>
-                <div class="metric-row">
-                    <span class="metric-label">Sem Resposta:</span>
-                    <span class="metric-value text-warning">${notResponded}</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-label">Meta Semanal (Prospects):</span>
-                    <span class="metric-value">${seller.contactedCount} / ${weeklyGoal}</span>
+            </div>
+
+            <div style="margin-top: 1rem;">
+                <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">Progresso Diário</div>
+                <div style="height: 8px; background: var(--input-bg); border-radius: 8px; overflow: hidden;">
+                    <div style="height: 100%; width: ${dailyPercent}%; background: linear-gradient(90deg, #ef4444, #f97316); border-radius: 8px; transition: width 0.3s;"></div>
                 </div>
             </div>
 
-            <div class="meta-status ${goalClass}">
-                ${goalStatus}
+            <div class="meta-status" style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+                <i data-lucide="settings" style="width: 14px; height: 14px; display: inline;"></i> Clique para definir metas
             </div>
         </div>
     `}).join('');
+
+    lucide.createIcons();
+}
+
+// --- GOALS SYSTEM ---
+
+// Open modal to set seller goals (Admin only)
+window.openSellerGoalsModal = function (sellerId, sellerName, dailyGoal, monthlyGoal, dailyCurrent, monthlyCurrent) {
+    document.getElementById('seller-goals-id').value = sellerId;
+    document.getElementById('seller-goals-name').textContent = sellerName;
+    document.getElementById('seller-daily-goal').value = dailyGoal;
+    document.getElementById('seller-monthly-goal').value = monthlyGoal;
+    document.getElementById('seller-current-daily').textContent = dailyCurrent;
+    document.getElementById('seller-current-monthly').textContent = monthlyCurrent;
+
+    document.getElementById('seller-goals-modal').classList.add('active');
+    lucide.createIcons();
+}
+
+window.closeSellerGoalsModal = function () {
+    document.getElementById('seller-goals-modal').classList.remove('active');
+}
+
+// Handle form submission for goals
+document.addEventListener('DOMContentLoaded', () => {
+    const goalsForm = document.getElementById('seller-goals-form');
+    if (goalsForm) {
+        goalsForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const sellerId = document.getElementById('seller-goals-id').value;
+            const dailyGoal = parseInt(document.getElementById('seller-daily-goal').value);
+            const monthlyGoal = parseInt(document.getElementById('seller-monthly-goal').value);
+
+            try {
+                const { error } = await _supabase
+                    .from('cadastros')
+                    .update({
+                        meta_diaria: dailyGoal,
+                        meta_mensal: monthlyGoal
+                    })
+                    .eq('id', sellerId);
+
+                if (error) throw error;
+
+                closeSellerGoalsModal();
+                showNotification('Metas atualizadas com sucesso!', 'success');
+                loadAdminData(); // Refresh admin dashboard
+            } catch (e) {
+                console.error('Erro ao salvar metas:', e);
+                showNotification('Erro ao salvar metas: ' + e.message, 'error');
+            }
+        });
+    }
+});
+
+// Update seller goals UI (for the seller's own view)
+function updateGoalsUI() {
+    const session = JSON.parse(localStorage.getItem('passionpro_session'));
+    if (!session) return;
+
+    const dailyCurrent = session.contatos_hoje || 0;
+    const dailyGoal = session.meta_diaria || 10;
+    const monthlyCurrent = session.contatos_mes || 0;
+    const monthlyGoal = session.meta_mensal || 200;
+
+    // Update daily
+    const dailyCurrentEl = document.getElementById('daily-current');
+    const dailyGoalEl = document.getElementById('daily-goal');
+    const dailyProgressBar = document.getElementById('daily-progress-bar');
+    const dailyStatus = document.getElementById('daily-status');
+
+    if (dailyCurrentEl) dailyCurrentEl.textContent = dailyCurrent;
+    if (dailyGoalEl) dailyGoalEl.textContent = dailyGoal;
+    if (dailyProgressBar) {
+        const percent = Math.min((dailyCurrent / dailyGoal) * 100, 100);
+        dailyProgressBar.style.width = percent + '%';
+    }
+    if (dailyStatus) {
+        if (dailyCurrent >= dailyGoal) {
+            dailyStatus.textContent = '🎉 Meta atingida! Parabéns!';
+            dailyStatus.classList.add('completed');
+        } else {
+            const remaining = dailyGoal - dailyCurrent;
+            dailyStatus.textContent = `Faltam ${remaining} contatos para bater a meta!`;
+            dailyStatus.classList.remove('completed');
+        }
+    }
+
+    // Update monthly
+    const monthlyCurrentEl = document.getElementById('monthly-current');
+    const monthlyGoalEl = document.getElementById('monthly-goal');
+    const monthlyProgressBar = document.getElementById('monthly-progress-bar');
+    const monthlyStatus = document.getElementById('monthly-status');
+
+    if (monthlyCurrentEl) monthlyCurrentEl.textContent = monthlyCurrent;
+    if (monthlyGoalEl) monthlyGoalEl.textContent = monthlyGoal;
+    if (monthlyProgressBar) {
+        const percent = Math.min((monthlyCurrent / monthlyGoal) * 100, 100);
+        monthlyProgressBar.style.width = percent + '%';
+    }
+    if (monthlyStatus) {
+        if (monthlyCurrent >= monthlyGoal) {
+            monthlyStatus.textContent = '🏆 Meta mensal atingida! Incrível!';
+            monthlyStatus.classList.add('completed');
+        } else {
+            const remaining = monthlyGoal - monthlyCurrent;
+            monthlyStatus.textContent = `Faltam ${remaining} contatos para a meta do mês`;
+            monthlyStatus.classList.remove('completed');
+        }
+    }
+}
+
+// Increment contact count when action is registered
+async function incrementContactCount() {
+    const session = JSON.parse(localStorage.getItem('passionpro_session'));
+    if (!session) return;
+
+    const newDailyCount = (session.contatos_hoje || 0) + 1;
+    const newMonthlyCount = (session.contatos_mes || 0) + 1;
+
+    try {
+        const { error } = await _supabase
+            .from('cadastros')
+            .update({
+                contatos_hoje: newDailyCount,
+                contatos_mes: newMonthlyCount
+            })
+            .eq('id', session.id);
+
+        if (error) throw error;
+
+        // Update local session
+        session.contatos_hoje = newDailyCount;
+        session.contatos_mes = newMonthlyCount;
+        localStorage.setItem('passionpro_session', JSON.stringify(session));
+
+        updateGoalsUI();
+    } catch (e) {
+        console.error('Erro ao atualizar contador:', e);
+    }
 }
