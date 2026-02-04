@@ -188,16 +188,62 @@
                     </div>
                 </header>
 
-                <!-- Daily Insights & Alerts -->
-                <div class="insights-container fade-in" id="daily-insights" style="display: none;">
-                    <div class="insight-card alert">
-                        <div class="insight-icon"><i data-lucide="alert-circle"></i></div>
-                        <div class="insight-content">
-                            <h3 id="reactivations-summary">📌 Carregando tarefas do dia...</h3>
-                            <p>Clientes sem interação há mais de 15 dias precisam de atenção.</p>
+                <!-- Main Goal Progress Tracker (At the top as requested) -->
+                <div class="goals-progress-container fade-in" id="goals-progress-area" style="margin-bottom: 2rem;">
+                    <div class="goals-grid">
+                        <!-- Daily Goal Card -->
+                        <div class="goal-card daily">
+                            <div class="goal-header">
+                                <div class="goal-icon">🔥</div>
+                                <div class="goal-info">
+                                    <h4>Sua Meta Diária</h4>
+                                    <p id="daily-goal-text">Faça seus contatos do dia para bater a meta!</p>
+                                </div>
+                            </div>
+                            <div class="goal-progress">
+                                <div class="goal-numbers">
+                                    <span id="daily-current">0</span>
+                                    <span class="goal-separator">/</span>
+                                    <span id="daily-goal">10</span>
+                                </div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill daily-fill" id="daily-progress-bar" style="width: 0%;">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="goal-status" id="daily-status">Carregando meta...</div>
+
+                            <!-- Small badge for inactive leads (moved here) -->
+                            <div id="inactive-badge"
+                                style="display: none; margin-top: 1rem; padding: 0.5rem; background: rgba(239, 68, 68, 0.1); border-radius: 8px; font-size: 0.8rem; color: #ef4444; cursor: pointer;"
+                                onclick="filterInactiveLeads()">
+                                <i data-lucide="alert-circle"
+                                    style="width: 14px; height: 14px; vertical-align: middle;"></i>
+                                <span id="inactive-count-text">X clientes parados há 15 dias</span>
+                            </div>
                         </div>
-                        <div class="insight-action">
-                            <button class="btn-primary btn-sm" onclick="filterInactiveLeads()">Ver Clientes</button>
+
+                        <!-- Monthly Goal Card -->
+                        <div class="goal-card monthly">
+                            <div class="goal-header">
+                                <div class="goal-icon">�</div>
+                                <div class="goal-info">
+                                    <h4>Sua Meta Mensal</h4>
+                                    <p>Acompanhe seu desempenho no mês</p>
+                                </div>
+                            </div>
+                            <div class="goal-progress">
+                                <div class="goal-numbers">
+                                    <span id="monthly-current">0</span>
+                                    <span class="goal-separator">/</span>
+                                    <span id="monthly-goal">200</span>
+                                </div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill monthly-fill" id="monthly-progress-bar"
+                                        style="width: 0%;"></div>
+                                </div>
+                            </div>
+                            <div class="goal-status" id="monthly-status">Você está indo bem!</div>
                         </div>
                     </div>
                 </div>
@@ -234,12 +280,12 @@
                     </div>
                 </div>
 
-                <!-- Urgent Tasks Area (Clients to call today) -->
+                <!-- Urgent Tasks Area (Living Agenda) -->
                 <div class="urgent-tasks-container fade-in" id="urgent-tasks-area"
                     style="display: none; margin-bottom: 2rem;">
                     <h3 style="margin-bottom: 1rem;">🔥 Clientes que você precisa chamar hoje</h3>
                     <div class="urgent-grid" id="urgent-tasks-grid">
-                        <!-- Cards injected here -->
+                        <!-- Cards injected here by renderUrgentTasks in app.js -->
                     </div>
                 </div>
 
@@ -259,6 +305,15 @@
                                 <option value="Cliente antigo">Cliente Antigo</option>
                                 <option value="Reativado">Reativado</option>
                                 <option value="Fechado">Fechado</option>
+                            </select>
+                        </div>
+                        <div class="filter-box">
+                            <select id="action-filter">
+                                <option value="all">Todas as Ações</option>
+                                <option value="Chamei e não respondeu">Chamei e não respondeu</option>
+                                <option value="Cliente reativado">Cliente reativado</option>
+                                <option value="Em conversa">Em conversa</option>
+                                <option value="sem-acao">Sem ação registrada</option>
                             </select>
                         </div>
                         <button id="btn-add-client" class="btn-primary" style="margin-left: auto;">
@@ -719,6 +774,62 @@
                     Salvar Alterações
                 </button>
             </footer>
+        </div>
+    </div>
+
+    <!-- Modal: Admin Set Goals for Seller -->
+    <div class="modal" id="seller-goals-modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <div class="header-info">
+                    <h2>Definir Metas</h2>
+                    <p id="seller-goals-name" style="color: var(--text-muted); margin-top: 0.5rem;">Nome da Vendedora
+                    </p>
+                </div>
+                <button class="btn-icon" onclick="closeSellerGoalsModal()">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="seller-goals-form">
+                    <input type="hidden" id="seller-goals-id">
+
+                    <div class="form-group" style="margin-bottom: 1.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            🔥 Meta Diária (contatos/dia)
+                        </label>
+                        <input type="number" id="seller-daily-goal" min="1" max="100" value="10"
+                            style="width: 100%; padding: 1rem; border-radius: 12px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); font-size: 1.2rem; font-weight: 700;">
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 1.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            📊 Meta Mensal (contatos/mês)
+                        </label>
+                        <input type="number" id="seller-monthly-goal" min="1" max="1000" value="200"
+                            style="width: 100%; padding: 1rem; border-radius: 12px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); font-size: 1.2rem; font-weight: 700;">
+                    </div>
+
+                    <div class="form-group"
+                        style="background: var(--input-bg); padding: 1rem; border-radius: 12px; margin-bottom: 1.5rem;">
+                        <h4 style="margin-bottom: 0.5rem; color: var(--text-main);">Progresso Atual</h4>
+                        <div style="display: flex; justify-content: space-between; color: var(--text-muted);">
+                            <span>Hoje: <strong id="seller-current-daily"
+                                    style="color: var(--accent-primary);">0</strong></span>
+                            <span>Este mês: <strong id="seller-current-monthly"
+                                    style="color: var(--accent-primary);">0</strong></span>
+                        </div>
+                    </div>
+
+                    <div class="form-actions" style="justify-content: space-between;">
+                        <button type="button" class="btn-secondary" onclick="closeSellerGoalsModal()">Cancelar</button>
+                        <button type="submit" class="btn-primary">
+                            <i data-lucide="save"></i>
+                            Salvar Metas
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
