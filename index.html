@@ -4,8 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel Follow-up | PassionPro</title>
+    <title>Painel de Acompanhamento | PassionPro</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles_admin.css">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,62 +21,87 @@
 
 <body class="dark-theme">
     <!-- Login Screen -->
-    <div id="login-screen" class="login-overlay">
-        <div class="login-card fade-in">
-            <div class="login-logo">
-                <span class="logo-text">PASSION<span class="logo-accent">PRO</span></span>
-                <p>VIVA COM PASSION</p>
+    <div id="login-screen" class="login-overlay login-perspective">
+        <div class="flip-container fade-in">
+            <div class="flipper" id="login-flipper">
+                <!-- FRONT: Login -->
+                <div class="login-card front">
+                    <div class="login-logo">
+                        <span class="logo-text">PASSION<span class="logo-accent">PRO</span></span>
+                        <p>VIVA COM PASSION</p>
+                    </div>
+
+                    <!-- Tabs -->
+                    <div class="login-tabs">
+                        <button class="login-tab active"
+                            onclick="switchLoginTab('login'); event.preventDefault();">Entrar</button>
+                        <button class="login-tab"
+                            onclick="switchLoginTab('register'); event.preventDefault();">Cadastro</button>
+                    </div>
+
+                    <!-- Login Form -->
+                    <form id="login-form">
+                        <div class="form-group">
+                            <label>E-mail ou Telefone</label>
+                            <input type="text" id="login-identifier" placeholder="exemplo@email.com ou 11999999999"
+                                required>
+                        </div>
+                        <div class="form-group">
+                            <label>Senha</label>
+                            <input type="password" id="login-password" placeholder="••••••••" required>
+                        </div>
+                        <button type="submit" class="btn-primary w-100">
+                            Entrar
+                            <i data-lucide="log-in"></i>
+                        </button>
+                        <div id="login-error" class="login-error-msg">E-mail/Telefone ou senha incorretos</div>
+                    </form>
+                </div>
+
+                <!-- BACK: Register -->
+                <div class="login-card back">
+                    <div class="login-logo">
+                        <span class="logo-text">PASSION<span class="logo-accent">PRO</span></span>
+                        <p>VIVA COM PASSION</p>
+                    </div>
+
+                    <!-- Tabs -->
+                    <div class="login-tabs">
+                        <button class="login-tab"
+                            onclick="switchLoginTab('login'); event.preventDefault();">Entrar</button>
+                        <button class="login-tab active"
+                            onclick="switchLoginTab('register'); event.preventDefault();">Cadastro</button>
+                    </div>
+
+                    <!-- Register Form -->
+                    <form id="register-form">
+                        <div class="form-group">
+                            <label>Nome Completo</label>
+                            <input type="text" id="reg-name" placeholder="Seu nome" required>
+                        </div>
+                        <div class="form-group">
+                            <label>E-mail</label>
+                            <input type="email" id="reg-email" placeholder="exemplo@email.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Telefone</label>
+                            <input type="tel" id="reg-phone" placeholder="11999999999" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Senha</label>
+                            <input type="password" id="reg-password" placeholder="Crie uma senha" required>
+                        </div>
+                        <button type="submit" class="btn-primary w-100">
+                            Criar Conta
+                            <i data-lucide="user-plus"></i>
+                        </button>
+                        <div id="reg-success" class="login-success-msg"
+                            style="color: #10b981; text-align: center; margin-top: 1rem; display: none;">Conta criada!
+                            Faça
+                            login.</div>
+                    </form>
+                </div>
             </div>
-
-            <!-- Tabs -->
-            <div class="login-tabs">
-                <button class="login-tab active" id="tab-login" onclick="switchLoginTab('login')">Login</button>
-                <button class="login-tab" id="tab-register" onclick="switchLoginTab('register')">Cadastro</button>
-            </div>
-
-            <!-- Login Form -->
-            <form id="login-form">
-                <div class="form-group">
-                    <label>E-mail ou Telefone</label>
-                    <input type="text" id="login-identifier" placeholder="exemplo@email.com ou 11999999999" required>
-                </div>
-                <div class="form-group">
-                    <label>Senha</label>
-                    <input type="password" id="login-password" placeholder="••••••••" required>
-                </div>
-                <button type="submit" class="btn-primary w-100">
-                    Entrar
-                    <i data-lucide="log-in"></i>
-                </button>
-                <div id="login-error" class="login-error-msg">E-mail/Telefone ou senha incorretos</div>
-            </form>
-
-            <!-- Register Form -->
-            <form id="register-form" style="display: none;">
-                <div class="form-group">
-                    <label>Nome Completo</label>
-                    <input type="text" id="reg-name" placeholder="Seu nome" required>
-                </div>
-                <div class="form-group">
-                    <label>E-mail</label>
-                    <input type="email" id="reg-email" placeholder="exemplo@email.com" required>
-                </div>
-                <div class="form-group">
-                    <label>Telefone</label>
-                    <input type="tel" id="reg-phone" placeholder="11999999999" required>
-                </div>
-                <div class="form-group">
-                    <label>Senha</label>
-                    <input type="password" id="reg-password" placeholder="Crie uma senha" required>
-                </div>
-                <button type="submit" class="btn-primary w-100">
-                    Criar Conta
-                    <i data-lucide="user-plus"></i>
-                </button>
-                <div id="reg-success" class="login-success-msg"
-                    style="color: #10b981; text-align: center; margin-top: 1rem; display: none;">Conta criada! Faça
-                    login.</div>
-            </form>
         </div>
     </div>
 
@@ -93,7 +119,7 @@
             <nav class="nav-menu">
                 <a href="#" class="nav-item active" data-section="follow-up">
                     <i data-lucide="users"></i>
-                    <span>Follow-up</span>
+                    <span>Acompanhamento</span>
                 </a>
                 <a href="#" class="nav-item" data-section="contacted">
                     <i data-lucide="send"></i>
@@ -102,6 +128,11 @@
                 <a href="#" class="nav-item" data-section="reports">
                     <i data-lucide="bar-chart-3"></i>
                     <span>Relatórios</span>
+                </a>
+                <!-- Admin Only Link -->
+                <a href="#" class="nav-item" data-section="admin-dashboard" id="nav-admin" style="display: none;">
+                    <i data-lucide="shield"></i>
+                    <span>Painel Admin</span>
                 </a>
                 <a href="#" class="nav-item" data-section="settings">
                     <i data-lucide="settings"></i>
@@ -130,7 +161,7 @@
                     style="margin-top: 10px; font-size: 0.7rem; color: #94a3b8; display: flex; align-items: center; gap: 6px;">
                     <span id="db-status-dot"
                         style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></span>
-                    <span id="db-status-text">Cloud Offline</span>
+                    <span id="db-status-text">Nuvem Offline</span>
                 </div>
             </div>
         </aside>
@@ -141,7 +172,7 @@
             <section id="section-follow-up" class="content-section active">
                 <header class="top-header">
                     <div class="header-title">
-                        <h1>Painel de Follow-up</h1>
+                        <h1>Painel de Acompanhamento</h1>
                         <p>Gerencie seus leads e reative clientes com eficiência.</p>
                     </div>
                     <div class="header-actions">
@@ -173,33 +204,42 @@
 
                 <!-- Stats Overview -->
                 <div class="stats-grid">
-                    <div class="stat-card">
+                    <div class="stat-card stat-filter" data-filter="REVENDEDOR" onclick="filterByStatCard(this)">
                         <div class="stat-icon novo"><i data-lucide="user-plus"></i></div>
                         <div class="stat-data">
                             <span class="stat-value" id="count-novos">0</span>
                             <span class="stat-label">Revendedores</span>
                         </div>
                     </div>
-                    <div class="stat-card">
+                    <div class="stat-card stat-filter" data-filter="LOJISTA" onclick="filterByStatCard(this)">
                         <div class="stat-icon em-conversa"><i data-lucide="message-circle"></i></div>
                         <div class="stat-data">
                             <span class="stat-value" id="count-conversa">0</span>
                             <span class="stat-label">Lojistas</span>
                         </div>
                     </div>
-                    <div class="stat-card">
+                    <div class="stat-card stat-filter" data-filter="EXCLUSIVA" onclick="filterByStatCard(this)">
                         <div class="stat-icon reativado"><i data-lucide="zap"></i></div>
                         <div class="stat-data">
                             <span class="stat-value" id="count-reativados">0</span>
                             <span class="stat-label">Cidade Exclusiva</span>
                         </div>
                     </div>
-                    <div class="stat-card">
+                    <div class="stat-card stat-filter" data-filter="USO" onclick="filterByStatCard(this)">
                         <div class="stat-icon fechado"><i data-lucide="check-circle"></i></div>
                         <div class="stat-data">
                             <span class="stat-value" id="count-fechados">0</span>
                             <span class="stat-label">Uso Próprio</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Urgent Tasks Area (Clients to call today) -->
+                <div class="urgent-tasks-container fade-in" id="urgent-tasks-area"
+                    style="display: none; margin-bottom: 2rem;">
+                    <h3 style="margin-bottom: 1rem;">🔥 Clientes que você precisa chamar hoje</h3>
+                    <div class="urgent-grid" id="urgent-tasks-grid">
+                        <!-- Cards injected here -->
                     </div>
                 </div>
 
@@ -269,6 +309,79 @@
                         </div>
                         <div class="table-info" id="table-info">
                             Mostrando 0 de 0 leads
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Admin Dashboard Section -->
+            <section id="section-admin-dashboard" class="content-section">
+                <header class="top-header">
+                    <div class="header-title">
+                        <div class="header-title">
+                            <h1>Painel do Administrador</h1>
+                            <p>Visão geral de desempenho de todas as vendedoras.</p>
+                        </div>
+                </header>
+
+                <div class="header-actions" style="justify-content: space-between;">
+                    <div class="admin-filter">
+                        <i data-lucide="sliders-horizontal" style="width: 16px; height: 16px;"></i>
+                        <select id="admin-filter-select">
+                            <option value="name">Ordenar por Nome</option>
+                            <option value="performance">Melhor Performance</option>
+                            <option value="meta_batida">Filtro: Meta Batida</option>
+                            <option value="meta_nao_batida">Filtro: Meta Não Atingida</option>
+                        </select>
+                    </div>
+
+                    <button id="clear-data" class="btn-danger-outline">
+                        <i data-lucide="trash-2"></i>
+                        Limpar Dados
+                    </button>
+                </div>
+
+                <!-- Admin Overview Cards -->
+                <div class="overview-cards">
+                    <div class="card fade-in">
+                        <div class="card-icon blue">
+                            <i data-lucide="users"></i>
+                        </div>
+                        <div class="card-info">
+                            <h3>Total Vendedoras</h3>
+                            <p id="admin-total-sellers">0</p>
+                        </div>
+                    </div>
+                    <div class="card fade-in">
+                        <div class="card-icon purple">
+                            <i data-lucide="target"></i>
+                        </div>
+                        <div class="card-info">
+                            <h3>Total Clientes</h3>
+                            <p id="admin-total-leads">0</p>
+                        </div>
+                    </div>
+                    <div class="card fade-in">
+                        <div class="card-icon green">
+                            <i data-lucide="message-square"></i>
+                        </div>
+                        <div class="card-info">
+                            <h3>Interações</h3>
+                            <p id="admin-total-interactions">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sellers Performance Cards -->
+                <div id="admin-sellers-grid" class="admin-cards-grid fade-in">
+                    <!-- Cards will be injected here via JS -->
+                    <div class="admin-seller-card">
+                        <div class="seller-header">
+                            <div class="seller-avatar">...</div>
+                            <div class="seller-info">
+                                <h3>Carregando...</h3>
+                                <p>Aguarde</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -352,6 +465,7 @@
                 </header>
 
                 <div class="settings-grid">
+
                     <!-- User Info Card -->
                     <div class="table-container profile-card fade-in">
                         <div class="profile-header">
@@ -365,7 +479,8 @@
                         <!-- Profile Photo Section -->
                         <div class="profile-photo-section"
                             style="margin-bottom: 2rem; padding: 1.5rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px;">
-                            <h3 style="font-size: 1rem; margin-bottom: 1rem; color: var(--text-main);">Foto de Perfil
+                            <h3 style="font-size: 1rem; margin-bottom: 1rem; color: var(--text-main);">Foto de
+                                Perfil
                             </h3>
                             <div style="display: flex; align-items: center; gap: 1.5rem;">
                                 <div id="profile-avatar-preview" class="avatar"
@@ -435,7 +550,7 @@
                                 <span class="status-badge status-reativado">Ativa</span>
                             </div>
                             <div class="preference-item">
-                                <span>Acesso Cloud</span>
+                                <span>Acesso à Nuvem</span>
                                 <span id="settings-db-status" class="status-badge status-novo">Sincronizado</span>
                             </div>
                             <div class="preference-item">
@@ -582,6 +697,12 @@
                         <button class="action-tag" data-action="Chamei e não respondeu">Chamei e não respondeu</button>
                         <button class="action-tag" data-action="Cliente reativado">Cliente reativado</button>
                         <button class="action-tag" data-action="Em conversa">Em conversa</button>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label>Data da Próxima Ação 🔥</label>
+                        <input type="date" id="modal-next-action-date"
+                            style="width: 100%; padding: 0.8rem; border-radius: 12px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); margin-top: 0.5rem;">
                     </div>
 
                     <div class="form-group">
