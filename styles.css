@@ -361,9 +361,29 @@ body {
     transition: var(--transition);
 }
 
+.stat-card.stat-filter {
+    cursor: pointer;
+}
+
 .stat-card:hover {
     border-color: rgba(255, 255, 255, 0.2);
     transform: translateY(-5px);
+}
+
+/* Active Filter State */
+.stat-card.stat-active {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.15), inset 0 0 0 1px var(--accent-primary);
+    transform: translateY(-5px) scale(1.02);
+}
+
+.stat-card.stat-active .stat-value {
+    color: var(--accent-primary);
+}
+
+.stat-card.stat-active .stat-label {
+    color: var(--text-main);
+    font-weight: 600;
 }
 
 .stat-icon {
@@ -1234,4 +1254,45 @@ tr[data-client-id] {
 
 tr[data-client-id]:hover td {
     background: rgba(255, 255, 255, 0.03);
+}
+
+/* Login Flip Animation */
+.login-perspective {
+    perspective: 1000px;
+}
+
+.flip-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.flipper {
+    display: grid;
+    grid-template-areas: "card";
+    transform-style: preserve-3d;
+    transition: transform 0.8s cubic-bezier(0.4, 0.0, 0.2, 1);
+    width: 100%;
+    max-width: 400px;
+}
+
+.login-card {
+    /* Existing styles apply here */
+    grid-area: card;
+    backface-visibility: hidden;
+    /* Ensure background is opaque for backface logic */
+    background: var(--sidebar-bg);
+}
+
+.login-card.front {
+    transform: rotateY(0deg);
+    z-index: 2;
+}
+
+.login-card.back {
+    transform: rotateY(180deg);
+}
+
+.flipper.flipped {
+    transform: rotateY(180deg);
 }
