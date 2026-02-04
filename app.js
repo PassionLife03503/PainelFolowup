@@ -83,11 +83,17 @@ function setupEventListeners() {
     saveClientBtn.addEventListener('click', async () => {
         const selectedTag = document.querySelector('.action-tag.selected');
         const description = document.getElementById('modal-action-desc').value;
+        const nextActionDate = document.getElementById('modal-next-action-date').value; // Get Date
         const actionText = selectedTag ? selectedTag.getAttribute('data-action') : '';
 
         const leadIndex = leadsData.findIndex(l => l.id === selectedClientId);
         if (leadIndex !== -1) {
-            const updatedLead = { ...leadsData[leadIndex], lastAction: actionText, details: description };
+            const updatedLead = {
+                ...leadsData[leadIndex],
+                lastAction: actionText,
+                details: description,
+                nextActionDate: nextActionDate // Save Date
+            };
             leadsData[leadIndex] = updatedLead;
 
             // Save & Update
@@ -148,6 +154,8 @@ function setupEventListeners() {
         filteredData = filterLeads();
         renderTable();
     });
+
+
 
     // Clear Data
     const clearDataBtn = document.getElementById('clear-data');
@@ -291,9 +299,36 @@ function processLeadsData(data) {
             lastAction: '', // Chamei e não respondeu, etc.
             lastActionDate: (item['DATA DE CADASTRO'] instanceof Date) ? item['DATA DE CADASTRO'].getTime() : Date.now(),
             details: '',     // Descrição detalhada
-            isMessaged: false // Novo: rastreia se o WhatsApp foi clicado
+            lastActionDate: (item['DATA DE CADASTRO'] instanceof Date) ? item['DATA DE CADASTRO'].getTime() : Date.now(),
+            details: '',     // Descrição detalhada
+            isMessaged: false, // Novo: rastreia se o WhatsApp foi clicado
+            nextActionDate: null // Data da próxima ação
         };
     });
+}
+
+function getNextActionStatus(dateString) {
+    if (!dateString) return 'none';
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Fix: Handle timezone offset to avoid "off-by-one-day" errors
+    const actionDate = new Date(dateString + 'T00:00:00');
+
+    const diffTime = actionDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return 'delayed';
+    if (diffDays === 0) return 'today';
+    if (diffDays === 1) return 'tomorrow';
+    return 'future';
+}
+
+function formatDateBr(dateString) {
+    if (!dateString) return '';
+    const part = dateString.split('-');
+    return `${part[2]}/${part[1]}`;
 }
 
 function updateFilterOptions() {
@@ -343,7 +378,21 @@ function renderTable() {
         return;
     }
 
-    tableBody.innerHTML = pageData.map(lead => `
+    tableBody.innerHTML = pageData.map(lead => {
+        const actionStatus = getNextActionStatus(lead.nextActionDate);
+        let actionBadge = '';
+
+        if (actionStatus === 'delayed') {
+            actionBadge = `<div class="next-action-badge action-delayed" title="Atrasado"><i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> ${formatDateBr(lead.nextActionDate)}</div>`;
+        } else if (actionStatus === 'today') {
+            actionBadge = `<div class="next-action-badge action-today" title="Hoje"><i data-lucide="flame" style="width:14px;height:14px;"></i> Hoje</div>`;
+        } else if (actionStatus === 'tomorrow') {
+            actionBadge = `<div class="next-action-badge action-tomorrow" title="Amanhã"><i data-lucide="hourglass" style="width:14px;height:14px;"></i> Amanhã</div>`;
+        } else if (lead.nextActionDate) {
+            actionBadge = `<span style="font-size: 0.8rem; color: var(--text-muted);">${formatDateBr(lead.nextActionDate)}</span>`;
+        }
+
+        return `
         <tr class="fade-in ${isInactive(lead) ? 'row-alert' : ''}" data-client-id="${lead.id}" onclick="openClientModal(${lead.id})">
             <td>
                 <input type="checkbox" class="manual-check" 
@@ -361,8 +410,11 @@ function renderTable() {
                 </span>
             </td>
             <td>
-                <div style="max-width: 250px; font-size: 0.9rem;">
-                    ${lead.lastAction ? `<strong>${lead.lastAction}</strong>` : lead.proximaAcao}
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <div style="max-width: 250px; font-size: 0.9rem;">
+                        ${lead.lastAction ? `<strong>${lead.lastAction}</strong>` : lead.proximaAcao}
+                    </div>
+                    ${actionBadge}
                 </div>
             </td>
             <td class="text-right">
@@ -371,11 +423,71 @@ function renderTable() {
                 </a>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
 
     tableInfo.textContent = `Mostrando ${startIndex + 1} a ${endIndex} de ${totalItems} leads`;
     renderPagination(totalItems);
+    renderUrgentTasks(); // Update Urgent Tasks Here
     lucide.createIcons();
+}
+
+function renderUrgentTasks() {
+    const container = document.getElementById('urgent-tasks-area');
+    const grid = document.getElementById('urgent-tasks-grid');
+
+    // Filter for Today and Delayed
+    const urgentLeads = leadsData.filter(lead => {
+        const status = getNextActionStatus(lead.nextActionDate);
+        return status === 'today' || status === 'delayed';
+    });
+
+    // Sort: Delayed first, then Today
+    urgentLeads.sort((a, b) => {
+        const statA = getNextActionStatus(a.nextActionDate);
+        const statB = getNextActionStatus(b.nextActionDate);
+        if (statA === 'delayed' && statB !== 'delayed') return -1;
+        if (statA !== 'delayed' && statB === 'delayed') return 1;
+        return 0;
+    });
+
+    if (urgentLeads.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+
+    // Limit to top 4 cards to not overwhelm
+    const displayLeads = urgentLeads.slice(0, 4);
+
+    grid.innerHTML = displayLeads.map(lead => {
+        const status = getNextActionStatus(lead.nextActionDate);
+        const isDelayed = status === 'delayed';
+        const badgeClass = isDelayed ? 'action-delayed' : 'action-today';
+        const icon = isDelayed ? 'alert-triangle' : 'flame';
+        const label = isDelayed ? 'Atrasado' : 'Para Hoje';
+
+        return `
+        <div class="urgent-card fade-in" onclick="openClientModal(${lead.id})">
+            <div class="urgent-card-header">
+                <span class="urgent-card-name">${lead.nome}</span>
+                <span class="status-badge ${getStatusClass(lead.status)}" style="font-size: 0.7rem;">${lead.status}</span>
+            </div>
+            <div class="urgent-card-action">
+                <i data-lucide="${icon}" style="width: 16px; height: 16px;"></i>
+                <span>${label} (${formatDateBr(lead.nextActionDate)})</span>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                ${lead.lastAction || lead.proximaAcao}
+            </p>
+            <div class="urgent-card-actions">
+                <a href="${generateWhatsAppLink(lead.telefone, lead.nome)}" target="_blank" class="btn-whatsapp" onclick="event.stopPropagation()" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">
+                    <i data-lucide="message-square" style="width: 14px; height: 14px;"></i> Chamar
+                </a>
+            </div>
+        </div>
+        `;
+    }).join('');
 }
 
 function renderPagination(totalItems) {
@@ -453,6 +565,48 @@ function updateStats() {
     updateInsights();
 }
 
+// Active Stat Card Filter
+let activeStatFilter = null;
+
+window.filterByStatCard = function (element) {
+    const filterValue = element.getAttribute('data-filter');
+    const allCards = document.querySelectorAll('.stat-filter');
+
+    // If clicking the same card, clear the filter
+    if (activeStatFilter === filterValue) {
+        activeStatFilter = null;
+        allCards.forEach(card => card.classList.remove('stat-active'));
+
+        // Reset to show all leads
+        statusFilter.value = 'all';
+        filteredData = filterLeads();
+        currentPage = 1;
+        renderTable();
+        showNotification('Filtro removido - mostrando todos', 'success');
+        return;
+    }
+
+    // Set new filter
+    activeStatFilter = filterValue;
+
+    // Visual feedback - highlight selected card
+    allCards.forEach(card => card.classList.remove('stat-active'));
+    element.classList.add('stat-active');
+
+    // Filter leads by the selected type
+    filteredData = leadsData.filter(lead => {
+        return lead.status.toUpperCase().includes(filterValue);
+    });
+
+    currentPage = 1;
+    renderTable();
+
+    // Show notification
+    const count = filteredData.length;
+    const label = element.querySelector('.stat-label').textContent;
+    showNotification(`Filtrando por ${label}: ${count} leads`, 'success');
+}
+
 function updateInsights() {
     const insightsContainer = document.getElementById('daily-insights');
     const summaryText = document.getElementById('reactivations-summary');
@@ -501,6 +655,10 @@ function switchSection(sectionId) {
             charts.status.resize();
             charts.trend.resize();
         }, 100);
+    }
+
+    if (sectionId === 'admin-dashboard') {
+        loadAdminData();
     }
 }
 
@@ -590,6 +748,16 @@ function openClientModal(clientId) {
     // Preenche campos de visualização
     document.getElementById('modal-client-name-display').textContent = lead.nome;
     document.getElementById('modal-client-email').textContent = lead.email || 'Não informado';
+
+    // Populate Next Action Date Input
+    const dateInput = document.getElementById('modal-next-action-date');
+    if (lead.nextActionDate) {
+        dateInput.value = lead.nextActionDate;
+    } else {
+        // Default to Today if not set
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.value = today;
+    }
 
     // Modo de visualização ativo por padrão
     document.getElementById('client-view-mode').style.display = 'block';
@@ -694,36 +862,26 @@ window.toggleMessaged = async function (event, clientId) {
 
 // --- AUTHENTICATION SYSTEM ---
 
-window.switchLoginTab = function (tab) {
-    const loginForm = document.getElementById('login-form');
-    const registerForm = document.getElementById('register-form');
-    const tabLogin = document.getElementById('tab-login');
-    const tabRegister = document.getElementById('tab-register');
+// --- AUTHENTICATION SYSTEM ---
 
-    if (tab === 'login') {
-        loginForm.style.display = 'block';
-        registerForm.style.display = 'none';
-        tabLogin.classList.add('active');
-        tabRegister.classList.remove('active');
+window.switchLoginTab = function (tab) {
+    const flipper = document.getElementById('login-flipper');
+    if (tab === 'register') {
+        flipper.classList.add('flipped');
     } else {
-        loginForm.style.display = 'none';
-        registerForm.style.display = 'block';
-        tabLogin.classList.remove('active');
-        tabRegister.classList.add('active');
+        flipper.classList.remove('flipped');
     }
 }
 
 function checkAuth() {
     _supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) {
-            // Buscamos o perfil estendido (role) na tabela vendedoras
             loadProfileAndShowApp(session.user);
         } else {
             showLogin();
         }
     });
 
-    // Escuta mudanças de auth (login/logout)
     _supabase.auth.onAuthStateChange((_event, session) => {
         if (!session) showLogin();
     });
@@ -731,51 +889,62 @@ function checkAuth() {
 
 async function loadProfileAndShowApp(authUser) {
     try {
+        console.log('Buscando perfil para:', authUser.id); // Debug
+
+        // Busca o perfil na tabela unificada 'cadastros'
         const { data: profile, error } = await _supabase
-            .from('vendedoras')
+            .from('cadastros')
             .select('*')
             .eq('id', authUser.id)
-            .single();
+            .maybeSingle();
 
-        if (error || !profile) {
-            // Caso o perfil não exista (erro de sync), tratamos
-            console.error('Perfil não encontrado no banco de dados');
-            await _supabase.auth.signOut(); // Faz logout silencioso
-            showLogin();
-            showNotification('Erro: Perfil não encontrado. Entre em contato com o suporte.', 'error');
+        if (error) {
+            alert('Erro de Banco de Dados: ' + error.message);
+            console.error(error);
             return;
         }
 
+        if (!profile) {
+            alert('Perfil não encontrado na tabela cadastros! ID: ' + authUser.id);
+            console.error('Perfil não encontrado em cadastros');
+            await _supabase.auth.signOut();
+            showLogin();
+            return;
+        }
+
+        console.log('Perfil carregado:', profile); // Debug
+
+        // Se for admin, o campo 'role' no banco deve ser 'admin'. 
+        // Se for vendedora, será 'vendedora'.
         localStorage.setItem('passionpro_session', JSON.stringify(profile));
         showApp(profile);
         loadLeadsFromSupabase();
     } catch (e) {
+        alert('Erro Fatal ao carregar perfil: ' + e.message);
         console.error('Erro ao carregar perfil:', e);
         showLogin();
-        showNotification('Erro ao carregar perfil: ' + e.message, 'error');
     }
 }
 
 async function handleLogin(e) {
     e.preventDefault();
+    console.log("handleLogin triggered");
+
     const email = document.getElementById('login-identifier').value.toLowerCase();
     const password = document.getElementById('login-password').value;
     const errorMsg = document.getElementById('login-error');
 
     try {
-        // Tenta fazer login normalmente
         const { data, error } = await _supabase.auth.signInWithPassword({
             email: email,
             password: password,
         });
 
         if (error) {
-            // Se falhar, tenta migrar usuário antigo
             console.log('Login falhou, tentando migrar usuário antigo...');
             const migrated = await migrateOldUser(email, password);
 
             if (migrated) {
-                // Tenta login novamente após migração
                 const { data: retryData, error: retryError } = await _supabase.auth.signInWithPassword({
                     email: email,
                     password: password,
@@ -793,7 +962,7 @@ async function handleLogin(e) {
                 return;
             }
 
-            errorMsg.textContent = "E-mail ou senha incorretos";
+            errorMsg.textContent = translateAuthError(error.message);
             errorMsg.classList.add('active');
             return;
         }
@@ -807,59 +976,42 @@ async function handleLogin(e) {
     }
 }
 
+function translateAuthError(message) {
+    if (message.includes("Invalid login credentials")) return "E-mail ou senha inválidos.";
+    if (message.includes("Email not confirmed")) return "E-mail não confirmado. Verifique sua caixa de entrada.";
+    if (message.includes("User not found")) return "Usuário não encontrado. Crie uma conta primeiro.";
+    return message;
+}
+
 // Função para migrar usuários antigos do sistema legado
 async function migrateOldUser(email, password) {
     try {
-        // Busca o usuário na tabela vendedoras (sistema antigo)
         const { data: oldUser, error: searchError } = await _supabase
-            .from('vendedoras')
+            .from('cadastros')
             .select('*')
             .eq('email', email)
             .maybeSingle();
 
-        if (searchError || !oldUser) {
-            console.log('Usuário não encontrado na tabela vendedoras');
-            return false;
-        }
+        if (searchError || !oldUser) return false;
+        if (oldUser.password !== password) return false;
 
-        // Verifica se a senha corresponde (sistema antigo armazenava em texto plano)
-        if (oldUser.password !== password) {
-            console.log('Senha não corresponde');
-            return false;
-        }
-
-        console.log('Usuário antigo encontrado, criando conta no Auth...');
-
-        // Cria o usuário no Supabase Auth
         const { data: newAuthUser, error: signUpError } = await _supabase.auth.signUp({
             email: email,
             password: password,
         });
 
-        if (signUpError) {
-            console.error('Erro ao criar conta no Auth:', signUpError);
-            return false;
-        }
+        if (signUpError) return false;
 
-        console.log('Conta criada no Auth, atualizando perfil...');
-
-        // Atualiza o registro antigo com o novo ID do Auth
         const { error: updateError } = await _supabase
-            .from('vendedoras')
+            .from('cadastros')
             .update({
                 id: newAuthUser.user.id,
-                password: null // Remove a senha em texto plano
+                password: null
             })
             .eq('email', email);
 
-        if (updateError) {
-            console.error('Erro ao atualizar perfil:', updateError);
-            // Mesmo se falhar o update, a conta Auth foi criada
-        }
-
         return true;
     } catch (e) {
-        console.error('Erro na migração:', e);
         return false;
     }
 }
@@ -873,7 +1025,6 @@ window.handleRegister = async function (e) {
     const successMsg = document.getElementById('reg-success');
 
     try {
-        // 1. Criar usuário no Auth do Supabase
         const { data, error } = await _supabase.auth.signUp({
             email: email,
             password: password,
@@ -881,16 +1032,15 @@ window.handleRegister = async function (e) {
 
         if (error) throw error;
 
-        // 2. Criar perfil na nossa tabela vendedoras vinculando o ID
         if (data.user) {
             const { error: profileError } = await _supabase
-                .from('vendedoras')
+                .from('cadastros')
                 .insert([{
                     id: data.user.id,
                     name,
                     email,
                     phone,
-                    role: 'vendedora' // Padrão: Vendedora
+                    role: 'vendedora' // Padrão
                 }]);
 
             if (profileError) throw profileError;
@@ -936,15 +1086,21 @@ function showLogin() {
 
 function applyRolePermissions(role) {
     const clearDataBtn = document.getElementById('clear-data');
+    const navAdmin = document.getElementById('nav-admin');
+    const navContacted = document.querySelector('[data-section="contacted"]');
     const reportsSection = document.querySelector('[data-section="reports"]');
 
     if (role === 'vendedora') {
         if (clearDataBtn) clearDataBtn.style.display = 'none';
-        // Vendedoras talvez não devam ver relatórios globais? 
-        // Se quiser bloquear, descomente:
-        // if (reportsSection) reportsSection.style.display = 'none';
+        if (navAdmin) navAdmin.style.display = 'none';
+        if (navContacted) navContacted.style.display = 'flex';
+    } else if (role === 'admin') {
+        if (clearDataBtn) clearDataBtn.style.display = 'flex';
+        if (navAdmin) navAdmin.style.display = 'flex';
+        if (navContacted) navContacted.style.display = 'none'; // Admin não vê contatados
     } else {
         if (clearDataBtn) clearDataBtn.style.display = 'flex';
+        if (navContacted) navContacted.style.display = 'flex';
     }
 }
 
@@ -973,7 +1129,7 @@ async function loadLeadsFromSupabase() {
 
         // Atualiza status visual
         document.getElementById('db-status-dot').style.background = '#10b981';
-        document.getElementById('db-status-text').textContent = 'Cloud Online';
+        document.getElementById('db-status-text').textContent = 'Nuvem Online';
 
         updateFilterOptions();
         updateStats();
@@ -981,7 +1137,7 @@ async function loadLeadsFromSupabase() {
     } catch (e) {
         console.error('Erro ao carregar leads da nuvem:', e.message);
         document.getElementById('db-status-dot').style.background = '#ef4444';
-        document.getElementById('db-status-text').textContent = 'Cloud Erro (API Key)';
+        document.getElementById('db-status-text').textContent = 'Erro na Nuvem';
     }
 }
 
@@ -1121,7 +1277,8 @@ async function handleAddClient(e) {
         lastAction: notes || 'Cliente cadastrado manualmente',
         lastActionDate: Date.now(),
         details: notes || '',
-        isMessaged: false
+        isMessaged: false,
+        nextActionDate: new Date().toISOString().split('T')[0] // Default to today
     };
 
     // Adiciona ao array local
@@ -1399,4 +1556,163 @@ function updateAvatarUI(imageUrl, initials = null) {
             avatar.textContent = initials;
         }
     });
+}
+
+
+// --- ADMIN DASHBOARD LOGIC ---
+
+async function loadAdminData() {
+    const session = JSON.parse(localStorage.getItem('passionpro_session'));
+
+    // Verificação de segurança no frontend
+    if (!session || session.role !== 'admin') {
+        showNotification('Acesso negado: Apenas administradores.', 'error');
+        return;
+    }
+
+    try {
+        showNotification('Carregando dados administrativos...', 'success');
+
+        // 1. Fetch ONLY sellers from 'cadastros' (excluding admins)
+        const { data: sellers, error: sellersError } = await _supabase
+            .from('cadastros')
+            .select('*')
+            .eq('role', 'vendedora');
+
+        if (sellersError) throw sellersError;
+
+        // 2. Fetch all leads (Admin RLS policy allows this)
+        const { data: allLeads, error: leadsError } = await _supabase
+            .from('leads_followup')
+            .select('*');
+
+        if (leadsError) throw leadsError;
+
+        // 3. Fetch recent actions logs for deeper analysis (optional, but good for "interaction count")
+        const { data: recentLogs, error: logsError } = await _supabase
+            .from('logs_acoes')
+            .select('*');
+
+        // Process Data
+        const stats = processAdminStats(sellers, allLeads, recentLogs || []);
+        renderAdminDashboard(stats);
+
+        showNotification('Dados atualizados com sucesso!', 'success');
+
+    } catch (e) {
+        console.error('Erro ao carregar painel admin:', e);
+        showNotification('Erro Admin: ' + (e.message || e.error_description || JSON.stringify(e)), 'error');
+    }
+}
+
+function processAdminStats(sellers, leads, logs) {
+    // Basic Counts
+    const totalSellers = sellers.length;
+    const totalLeads = leads.length;
+    const totalInteractions = logs.length;
+
+    // Per Seller Stats
+    const sellerStats = sellers.map(seller => {
+        const sellerLeads = leads.filter(l => l.vendedora_id === seller.id);
+        const sellerLogs = logs.filter(l => l.vendedora_id === seller.id);
+
+        // Count Reactivated (assuming status 'Reativado' or specific action)
+        const reactivatedCount = sellerLeads.filter(l =>
+            l.status === 'Reativado' ||
+            (l.lastAction && l.lastAction.toLowerCase().includes('reativado'))
+        ).length;
+
+        // Count Contacted (leads with any interaction or messages)
+        const contactedCount = sellerLeads.filter(l =>
+            l.isMessaged || (l.lastAction && l.lastAction.trim() !== '')
+        ).length;
+
+        // Find last activity
+        let lastActivity = 'Sem atividade';
+        if (sellerLogs.length > 0) {
+            // Sort logs by date desc
+            sellerLogs.sort((a, b) => new Date(b.data_hora) - new Date(a.data_hora));
+            const lastDate = new Date(sellerLogs[0].data_hora);
+            lastActivity = lastDate.toLocaleDateString('pt-BR') + ' ' + lastDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        return {
+            id: seller.id,
+            name: seller.name,
+            avatar_url: seller.avatar_url,
+            totalLeads: sellerLeads.length,
+            contactedCount,
+            reactivatedCount,
+            lastActivity
+        };
+    });
+
+    return {
+        totalSellers,
+        totalLeads,
+        totalInteractions,
+        sellerStats
+    };
+}
+
+function renderAdminDashboard(stats) {
+    // Overview Cards
+    document.getElementById('admin-total-sellers').textContent = stats.totalSellers;
+    document.getElementById('admin-total-leads').textContent = stats.totalLeads;
+    document.getElementById('admin-total-interactions').textContent = stats.totalInteractions;
+
+    // Grid Container
+    const gridContainer = document.getElementById('admin-sellers-grid');
+    if (!gridContainer) return;
+
+    if (stats.sellerStats.length === 0) {
+        gridContainer.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 2rem; color: var(--text-muted);">Nenhuma vendedora encontrada.</div>`;
+        return;
+    }
+
+    gridContainer.innerHTML = stats.sellerStats.map(seller => {
+        // Cálculo básico de "Não responderam" (Ex: Total Leads - Contatados)
+        const notResponded = seller.totalLeads - seller.contactedCount;
+
+        // Meta (Hardcoded por enquanto)
+        const weeklyGoal = 50;
+        const goalStatus = seller.contactedCount >= weeklyGoal ? 'Meta Atingida' : 'Meta não atingida';
+        const goalClass = seller.contactedCount >= weeklyGoal ? 'atingida' : 'nao-atingida';
+
+        // Determinar cargo para exibição
+        const displayRole = seller.role === 'admin' ? 'Administrador' : 'Vendedora';
+
+        return `
+        <div class="admin-seller-card fade-in">
+            <div class="seller-header">
+                <div class="seller-avatar" 
+                     style="${seller.avatar_url ? `background-image: url(${seller.avatar_url}); background-size: cover; color: transparent;` : ''}">
+                    ${seller.avatar_url ? '' : seller.name.substring(0, 2).toUpperCase()}
+                </div>
+                <div class="seller-info">
+                    <h3>${seller.name}</h3>
+                    <p>${displayRole}</p>
+                </div>
+            </div>
+            
+            <div class="seller-metrics">
+                <div class="metric-row">
+                    <span class="metric-label">Clientes Reativados:</span>
+                    <span class="metric-value text-success">${seller.reactivatedCount}</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Sem Resposta:</span>
+                    <span class="metric-value text-warning">${notResponded}</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Meta Semanal (Prospects):</span>
+                    <span class="metric-value">${seller.contactedCount} / ${weeklyGoal}</span>
+                </div>
+            </div>
+
+            <div class="meta-status ${goalClass}">
+                ${goalStatus}
+            </div>
+        </div>
+    `}).join('');
 }
