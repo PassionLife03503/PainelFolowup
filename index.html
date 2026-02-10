@@ -134,6 +134,10 @@
                     <i data-lucide="shield"></i>
                     <span>Painel Admin</span>
                 </a>
+                <a href="#" class="nav-item" data-section="ai-config" id="nav-ai-config" style="display: none;">
+                    <i data-lucide="bot"></i>
+                    <span>Configuração IA</span>
+                </a>
                 <a href="#" class="nav-item" data-section="settings">
                     <i data-lucide="settings"></i>
                     <span>Configurações</span>
@@ -244,6 +248,181 @@
                                 </div>
                             </div>
                             <div class="goal-status" id="monthly-status">Você está indo bem!</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NEW: Broadcast Configuration Panel -->
+                <div class="table-container fade-in" id="broadcast-config-panel"
+                    style="margin-bottom: 2rem; padding: 2rem;">
+                    <div class="info-header" style="margin-bottom: 1.5rem;">
+                        <i data-lucide="zap" style="color: var(--status-conversa);"></i>
+                        <h3>Configuração de Disparo Automático</h3>
+                    </div>
+
+                    <div class="broadcast-grid"
+                        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem;">
+                        <!-- Basic Config -->
+                        <div class="config-group">
+                            <div class="form-group" style="margin-bottom: 1.5rem;">
+                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">� Nome da
+                                    Campanha</label>
+                                <input type="text" id="broadcast-campaign-name" placeholder="Ex: Reativação Fevereiro"
+                                    style="width: 100%; padding: 0.75rem; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main);">
+                                <small style="color: var(--text-muted);">Identificador para relatórios e
+                                    métricas.</small>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 1.5rem;">
+                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">�🚀 Quantidade
+                                    de
+                                    Contatos</label>
+                                <input type="number" id="broadcast-limit" min="1" value="50"
+                                    style="width: 100%; padding: 0.75rem; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main);">
+                                <small style="color: var(--text-muted);">Inicie conversa com quantos contatos nesta
+                                    leva?</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">⏱️ Intervalo
+                                    entre Mensagens (segundos)</label>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="number" id="broadcast-interval-min" min="5" value="30"
+                                        style="width: 100%; padding: 0.75rem; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main);">
+                                    <span>a</span>
+                                    <input type="number" id="broadcast-interval-max" min="10" value="90"
+                                        style="width: 100%; padding: 0.75rem; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main);">
+                                </div>
+                                <small style="color: var(--text-muted);">Intervalo aleatório para evitar
+                                    bloqueio.</small>
+                            </div>
+                        </div>
+
+                        <!-- Time & Schedule -->
+                        <div class="config-group">
+                            <div class="form-group" style="margin-bottom: 1.5rem;">
+                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">📅 Período de
+                                    Envio</label>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="time" id="broadcast-time-start" value="09:00"
+                                        style="width: 100%; padding: 0.75rem; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main);">
+                                    <span>até</span>
+                                    <input type="time" id="broadcast-time-end" value="18:00"
+                                        style="width: 100%; padding: 0.75rem; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main);">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">🔍 Segmentação
+                                    (Filtros)</label>
+                                <div
+                                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                    <select id="broadcast-filter-status"
+                                        style="width: 100%; padding: 0.75rem; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main);">
+                                        <option value="all">Status: Todos</option>
+                                        <option value="Novo lead">Novo lead</option>
+                                        <option value="Sumiu">Sumiu</option>
+                                        <option value="Reativado">Reativado</option>
+                                    </select>
+                                    <select id="broadcast-filter-type"
+                                        style="width: 100%; padding: 0.75rem; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main);">
+                                        <option value="all">Tipo: Todos</option>
+                                        <option value="REVENDEDOR">Revendedor</option>
+                                        <option value="CONSUMIDOR">Consumidor</option>
+                                    </select>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                    <select id="broadcast-filter-city"
+                                        style="width: 100%; padding: 0.75rem; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main);">
+                                        <option value="all">Cidade: Todas</option>
+                                    </select>
+                                    <input type="date" id="broadcast-filter-date"
+                                        style="width: 100%; padding: 0.75rem; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main);">
+                                </div>
+                                <small style="color: var(--text-muted);">Deixe em branco ou 'Todos' para não
+                                    filtrar.</small>
+                            </div>
+                        </div>
+
+                        <!-- Message Template -->
+                        <div class="config-group">
+                            <div class="form-group" style="margin-bottom: 1rem;">
+                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">📁 Tipo de
+                                    Mensagem</label>
+                                <select id="broadcast-type" class="form-select" onchange="toggleMediaUrlField()"
+                                    style="width: 100%; padding: 0.75rem; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main);">
+                                    <option value="text">Texto</option>
+                                    <option value="image">Imagem</option>
+                                    <option value="audio">Áudio</option>
+                                    <option value="document">PDF / Documento</option>
+                                    <option value="video">Vídeo</option>
+                                </select>
+                            </div>
+
+                            <div id="media-url-group" class="form-group" style="margin-bottom: 1rem; display: none;">
+                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">� URL da
+                                    Mídia</label>
+                                <input type="text" id="broadcast-media-url"
+                                    placeholder="https://exemplo.com/arquivo.jpg"
+                                    style="width: 100%; padding: 0.75rem; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main);">
+                                <small style="color: var(--text-muted);">Link direto para o arquivo.</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">📝 Mensagem do
+                                    Disparo</label>
+                                <textarea id="broadcast-message" rows="5"
+                                    placeholder="Olá {{nome}}, vimos que você é um {{tipo}} e queríamos..."
+                                    style="width: 100%; padding: 0.75rem; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); font-family: inherit; resize: vertical;"></textarea>
+                                <div style="margin-top: 0.5rem; display: flex; gap: 0.3rem; flex-wrap: wrap;">
+                                    <button type="button" class="btn-secondary"
+                                        style="padding: 4px 8px; font-size: 0.7rem; border-radius: 6px;"
+                                        onclick="insertVar('{{nome}}')">{{nome}}</button>
+                                    <button type="button" class="btn-secondary"
+                                        style="padding: 4px 8px; font-size: 0.7rem; border-radius: 6px;"
+                                        onclick="insertVar('{{tipo}}')">{{tipo}}</button>
+                                    <button type="button" class="btn-secondary"
+                                        style="padding: 4px 8px; font-size: 0.7rem; border-radius: 6px;"
+                                        onclick="insertVar('{{cidade}}')">{{cidade}}</button>
+                                    <button type="button" class="btn-secondary"
+                                        style="padding: 4px 8px; font-size: 0.7rem; border-radius: 6px;"
+                                        onclick="insertVar('{{telefone}}')">{{telefone}}</button>
+                                    <button type="button" class="btn-secondary"
+                                        style="padding: 4px 8px; font-size: 0.7rem; border-radius: 6px;"
+                                        onclick="insertVar('{{proxima_acao}}')">{{proxima_acao}}</button>
+                                </div>
+                                <small style="color: var(--text-muted); display: block; margin-top: 0.5rem;">Clique nas
+                                    tags para personalizar.</small>
+                            </div>
+                        </div>
+
+                        <!-- Preview & Actions -->
+                        <div class="config-group"
+                            style="background: rgba(255, 255, 255, 0.02); padding: 1.5rem; border-radius: 15px; border: 1px solid var(--border-color);">
+                            <h4 style="margin-bottom: 1rem;">Resumo da Execução</h4>
+                            <div style="display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.9rem;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">Contatos elegíveis:</span>
+                                    <strong id="broadcast-preview-count">0</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">Tempo estimado:</span>
+                                    <strong id="broadcast-preview-time">0 min</strong>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                                <button class="btn-primary" id="btn-start-broadcast"
+                                    style="width: 100%; justify-content: center; background: var(--status-novo);">
+                                    <i data-lucide="play-circle"></i>
+                                    Iniciar Disparo
+                                </button>
+                                <button class="btn-secondary" id="btn-save-broadcast-config"
+                                    style="width: 100%; justify-content: center;">
+                                    <i data-lucide="save"></i>
+                                    Salvar Configuração
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -616,6 +795,350 @@
                     </div>
                 </div>
             </section>
+
+            <!-- AI Configuration Section -->
+            <section id="section-ai-config" class="content-section">
+                <header class="top-header">
+                    <div class="header-title">
+                        <h1>Configuração do Agente de IA</h1>
+                        <p>Customize a personalidade, voz e conhecimento do seu assistente comercial.</p>
+                    </div>
+                </header>
+
+                <div class="ai-config-container fade-in">
+                    <!-- AI Tabs -->
+                    <div class="ai-tabs">
+                        <button class="ai-tab active" data-ai-tab="personality">
+                            <i data-lucide="user-cog"></i>
+                            Personalidade
+                        </button>
+                        <button class="ai-tab" data-ai-tab="voice">
+                            <i data-lucide="mic"></i>
+                            Voz
+                        </button>
+                        <button class="ai-tab" data-ai-tab="prompt">
+                            <i data-lucide="message-square"></i>
+                            Prompt Base
+                        </button>
+                        <button class="ai-tab" data-ai-tab="database">
+                            <i data-lucide="database"></i>
+                            Base de Dados
+                        </button>
+                        <button class="ai-tab" data-ai-tab="n8n">
+                            <i data-lucide="zap"></i>
+                            Integração n8n
+                        </button>
+                        <button class="ai-tab" data-ai-tab="whatsapp">
+                            <i data-lucide="message-circle"></i>
+                            API WhatsApp
+                        </button>
+                    </div>
+
+                    <!-- Personality Tab Content -->
+                    <div id="ai-tab-personality" class="ai-tab-content active">
+                        <div class="table-container">
+                            <div class="form-group">
+                                <label>Personalidade do Agente</label>
+                                <textarea id="ai-personality"
+                                    placeholder="Ex: Um assistente prestativo, focado em vendas e muito educado."
+                                    rows="4"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Características do Agente</label>
+                                <textarea id="ai-characteristics"
+                                    placeholder="Ex: Usa emojis, fala de forma descontraída, sempre termina com uma pergunta."
+                                    rows="4"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Tom de Voz</label>
+                                <select id="ai-tone" class="form-select">
+                                    <option value="elegant">Elegante</option>
+                                    <option value="direct">Direto</option>
+                                    <option value="welcoming">Acolhedor</option>
+                                    <option value="technical">Técnico</option>
+                                    <option value="personalized">Personalizado</option>
+                                </select>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn-primary" onclick="saveAIConfig()">
+                                    <i data-lucide="save"></i>
+                                    Salvar Alterações
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Voice Tab Content -->
+                    <div id="ai-tab-voice" class="ai-tab-content">
+                        <div class="table-container">
+                            <div class="form-group"
+                                style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1.5rem;">
+                                <div>
+                                    <h3 style="font-size: 1.1rem; margin-bottom: 0.2rem;">Habilitar Voz (TTS)</h3>
+                                    <p style="color: var(--text-muted); font-size: 0.9rem;">O agente poderá enviar
+                                        áudios e responder por voz.</p>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="ai-voice-enabled">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Provedor de Voz</label>
+                                    <select id="ai-voice-provider" class="form-select">
+                                        <option value="elevenlabs">ElevenLabs</option>
+                                        <option value="openai">OpenAI</option>
+                                        <option value="azure">Azure</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>ID da Voz (Voice ID)</label>
+                                    <input type="text" id="ai-voice-id" placeholder="Ex: pMsX7pD95rqfC1SAnpsh">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Velocidade / Estilo</label>
+                                <input type="text" id="ai-voice-style" placeholder="Ex: 1.0 ou 'cheerful'">
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn-primary" onclick="saveAIConfig()">
+                                    <i data-lucide="save"></i>
+                                    Salvar Alterações
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Prompt Tab Content -->
+                    <div id="ai-tab-prompt" class="ai-tab-content">
+                        <div class="table-container">
+                            <div class="form-group">
+                                <button class="btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;"
+                                    onclick="restoreDefaultPrompt()">
+                                    <i data-lucide="rotate-ccw" style="width: 14px; height: 14px;"></i>
+                                    Restaurar Padrão
+                                </button>
+                                <button class="btn-primary"
+                                    style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background: var(--status-conversa); color: white; border: none; box-shadow: none;"
+                                    onclick="openPromptPreview()">
+                                    <i data-lucide="eye" style="width: 14px; height: 14px;"></i>
+                                    Visualizar Prompt Final
+                                </button>
+                            </div>
+                            <textarea id="ai-system-prompt" style="font-family: monospace; font-size: 0.9rem;" rows="15"
+                                placeholder="Instruções fundamentais do agente..."></textarea>
+                        </div>
+                        <div class="ai-test-container">
+                            <div class="form-group">
+                                <label>Testar Resposta do Agente</label>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <input type="text" id="ai-test-input"
+                                        placeholder="Digite uma pergunta para o agente..." style="flex: 1;">
+                                    <button class="btn-primary" onclick="testAIResponse()">
+                                        <i data-lucide="play"></i>
+                                        Testar
+                                    </button>
+                                    <button class="btn-primary"
+                                        style="background: var(--status-reativado); border: none;"
+                                        onclick="testAIWithKnowledgeBase()">
+                                        <i data-lucide="database"></i>
+                                        Testar com Documento
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="ai-test-output" class="ai-test-output" style="display: none;">
+                                <div class="output-header">Resposta do Agente:</div>
+                                <div class="output-content" id="ai-test-output-content"></div>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn-primary" onclick="saveAIConfig()">
+                                <i data-lucide="save"></i>
+                                Salvar Alterações
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Database Tab Content -->
+                    <div id="ai-tab-database" class="ai-tab-content">
+                        <div class="table-container">
+                            <div class="upload-area" id="ai-upload-area">
+                                <i data-lucide="upload-cloud"
+                                    style="width: 48px; height: 48px; color: var(--accent-primary); margin-bottom: 1rem;"></i>
+                                <h3>Faça upload de documentos</h3>
+                                <p>Arraste arquivos ou clique para selecionar (PDF, CSV, XLSX, DOCX)</p>
+                                <input type="file" id="ai-db-upload" hidden accept=".pdf,.csv,.xlsx,.xls,.doc,.docx"
+                                    multiple>
+                                <button class="btn-primary" onclick="document.getElementById('ai-db-upload').click()">
+                                    Selecionar Arquivos
+                                </button>
+                            </div>
+
+                            <div class="documents-list-container" style="margin-top: 2rem;">
+                                <h3>Documentos na Base de Conhecimento</h3>
+                                <div class="responsive-table">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Nome do Arquivo</th>
+                                                <th>Tipo</th>
+                                                <th>Data</th>
+                                                <th>Status</th>
+                                                <th class="text-right">Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="ai-documents-table-body">
+                                            <tr class="empty-state">
+                                                <td colspan="5">
+                                                    <div class="empty-content">
+                                                        <i data-lucide="file-text"></i>
+                                                        <p>Nenhum documento enviado ainda.</p>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- n8n Integration Tab Content -->
+                    <div id="ai-tab-n8n" class="ai-tab-content">
+                        <div class="table-container">
+                            <div class="info-header" style="margin-bottom: 2rem;">
+                                <i data-lucide="link" style="color: var(--status-reativado);"></i>
+                                <div>
+                                    <h3>Status da Integração n8n</h3>
+                                    <p style="font-size: 0.9rem; color: var(--text-muted);">Configuração do agente
+                                        de IA
+                                        e automação de processos.</p>
+                                </div>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 2rem;">
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
+                                    <label>Webhook URL (n8n)</label>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 0.8rem; color: var(--text-muted);">Ambiente de
+                                            Teste</span>
+                                        <label class="switch" style="transform: scale(0.7);">
+                                            <input type="checkbox" id="n8n-test-mode"
+                                                onchange="toggleN8nMode(this.checked)">
+                                            <span class="slider round"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 10px;">
+                                    <input type="text" id="n8n-webhook-url"
+                                        value="https://adryanlife.app.n8n.cloud/webhook/sistemafolowup"
+                                        style="flex: 1; padding: 0.8rem; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-main);">
+                                    <div id="n8n-status-badge" class="status-badge status-novo"
+                                        style="display: flex; align-items: center; gap: 5px;">
+                                        <i data-lucide="check-circle" style="width: 14px; height: 14px;"></i>
+                                        <span>Ativo</span>
+                                    </div>
+                                    <button class="btn-primary" onclick="testWebhookConnection()"
+                                        style="padding: 0 1rem;">
+                                        <i data-lucide="refresh-cw"></i>
+                                        Testar
+                                    </button>
+                                </div>
+                                <small style="color: var(--text-muted); margin-top: 0.5rem; display: block;">
+                                    Use o <strong>Ambiente de Teste</strong> para ver os dados chegando no editor do n8n
+                                    em tempo real.
+                                    <br>
+                                    <strong style="color: #f59e0b;">⚠️ Importante: Desative o modo teste para uso em
+                                        produção.</strong>
+                                </small>
+                            </div>
+
+                            <div
+                                style="background: rgba(16, 185, 129, 0.05); padding: 1.5rem; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.2);">
+                                <h4 style="margin-bottom: 0.5rem; color: #10b981;">✅ Sistema Conectado</h4>
+                                <p style="font-size: 0.9rem; color: var(--text-main);">O n8n agora gerencia:
+                                <ul
+                                    style="margin-top: 0.5rem; margin-left: 1.5rem; color: var(--text-muted); font-size: 0.85rem;">
+                                    <li>Disparo inteligente de mensagens</li>
+                                    <li>Análise de personalidade do agente</li>
+                                    <li>Respostas baseadas em Base de Conhecimento (RAG)</li>
+                                    <li>Logs de interação em tempo real</li>
+                                </ul>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- WhatsApp API Tab Content -->
+                    <div id="ai-tab-whatsapp" class="ai-tab-content">
+                        <div class="table-container">
+                            <div class="info-header" style="margin-bottom: 2rem;">
+                                <i data-lucide="smartphone" style="color: #25d366;"></i>
+                                <div>
+                                    <h3>Configuração da API de WhatsApp</h3>
+                                    <p style="font-size: 0.9rem; color: var(--text-muted);">Conecte o sistema a
+                                        uma
+                                        plataforma de disparo oficial ou API.</p>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Plataforma API</label>
+                                    <select id="wa-api-platform" class="form-select">
+                                        <option value="evolution">Evolution API</option>
+                                        <option value="z-api">Z-API</option>
+                                        <option value="other">Outra (n8n Handle)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Nome da Instância</label>
+                                    <input type="text" id="wa-instance-name" placeholder="Ex: Principal">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>URL da API</label>
+                                <input type="text" id="wa-api-url" placeholder="https://api.exemplo.com">
+                            </div>
+
+                            <div class="form-group">
+                                <label>API Key / Global Token</label>
+                                <input type="password" id="wa-api-key" placeholder="••••••••••••••••">
+                            </div>
+
+                            <div
+                                style="background: rgba(37, 211, 102, 0.05); padding: 1.5rem; border-radius: 12px; border: 1px solid rgba(37, 211, 102, 0.2); margin-top: 1rem;">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;">
+                                    <div style="width: 10px; height: 10px; background: #25d366; border-radius: 50%;">
+                                    </div>
+                                    <h4 style="color: #25d366;">Integração via Envio Automático</h4>
+                                </div>
+                                <p style="font-size: 0.85rem; color: var(--text-main);">
+                                    Ao configurar estas credenciais, o software poderá enviar mensagens
+                                    automaticamente
+                                    durante os disparos, sem a necessidade de clicar em cada link do WhatsApp.
+                                </p>
+                            </div>
+
+                            <div class="form-actions" style="margin-top: 2rem;">
+                                <button type="button" class="btn-primary" onclick="saveAIConfig()"
+                                    style="background: #25d366; border-color: #25d366;">
+                                    <i data-lucide="save"></i>
+                                    Salvar Credenciais WhatsApp
+                                </button>
+                                <button type="button" class="btn-secondary" onclick="testWhatsAppConnection()">
+                                    <i data-lucide="refresh-cw"></i>
+                                    Testar Conexão
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
         </main>
     </div>
 
@@ -751,7 +1274,29 @@
                     <div class="action-options">
                         <button class="action-tag" data-action="Chamei e não respondeu">Chamei e não respondeu</button>
                         <button class="action-tag" data-action="Cliente reativado">Cliente reativado</button>
+                        <button class="action-tag" data-action="Cliente respondeu"
+                            style="background: rgba(37, 211, 102, 0.1); color: #25d366; border-color: rgba(37, 211, 102, 0.2);">Cliente
+                            respondeu</button>
                         <button class="action-tag" data-action="Em conversa">Em conversa</button>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label>Tipo de Mídia / Formato</label>
+                        <div class="message-type-selector"
+                            style="display: flex; gap: 8px; margin-top: 0.5rem; flex-wrap: wrap;">
+                            <button type="button" class="type-tag selected" data-type="text">
+                                <i data-lucide="align-left" style="width: 14px;"></i> Texto
+                            </button>
+                            <button type="button" class="type-tag" data-type="audio">
+                                <i data-lucide="mic" style="width: 14px;"></i> Áudio
+                            </button>
+                            <button type="button" class="type-tag" data-type="image">
+                                <i data-lucide="image" style="width: 14px;"></i> Imagem
+                            </button>
+                            <button type="button" class="type-tag" data-type="document">
+                                <i data-lucide="file-text" style="width: 14px;"></i> Doc
+                            </button>
+                        </div>
                     </div>
 
                     <div class="form-group" style="margin-bottom: 1rem;">
@@ -835,6 +1380,36 @@
 
     <!-- Notification system -->
     <div id="notification-toast" class="toast"></div>
+
+    <!-- Modal: Prompt Preview -->
+    <div class="modal" id="prompt-preview-modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <div class="header-info">
+                    <h2>Prévia do Prompt Final</h2>
+                    <p style="color: var(--text-muted); margin-top: 0.5rem;">Veja como o agente interpretará suas
+                        configurações</p>
+                </div>
+                <button class="btn-icon" onclick="closePromptPreview()">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="preview-container"
+                    style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; max-height: 500px; overflow-y: auto;">
+                    <pre id="final-prompt-text"
+                        style="font-family: 'Fira Code', monospace; font-size: 0.9rem; line-height: 1.6; white-space: pre-wrap; color: var(--text-main);"></pre>
+                </div>
+                <div class="form-actions" style="margin-top: 1.5rem; justify-content: space-between;">
+                    <button type="button" class="btn-secondary" onclick="closePromptPreview()">Fechar</button>
+                    <button type="button" class="btn-primary" onclick="copyFinalPrompt()">
+                        <i data-lucide="copy"></i>
+                        Copiar Prompt
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
