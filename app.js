@@ -3,12 +3,43 @@ const SUPABASE_URL = 'https://lupecrnrdhvuqbvmmxdc.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1cGVjcm5yZGh2dXFidm1teGRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMzU1MTAsImV4cCI6MjA4NTcxMTUxMH0.zxegyFwBNaTB1QaxWXwzo1WNGpnOafGPL6Zk7TeksnY'; // Insira aqui a sua chave Anon (PublicKey)
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// n8n Webhook Configuration
+let N8N_BASE_URL = 'https://adryanlife.app.n8n.cloud/webhook/sistemafolowup';
+let isN8nTestMode = false;
+
+function getN8nUrl() {
+    const input = document.getElementById('n8n-webhook-url');
+    // Se o usuário editou o campo, usamos o valor dele, caso contrário o padrão
+    let url = input ? input.value : N8N_BASE_URL;
+    return url;
+}
+
 // App State
 let leadsData = [];
 let charts = {};
 let currentPage = 1;
 let itemsPerPage = 10;
 let filteredData = []; // Store filtered data to make pagination easier
+let aiDocuments = []; // Store AI knowledge base documents
+
+// Helper to save leads to localStorage consistently
+function saveLeadsToLocal() {
+    localStorage.setItem('passionpro_leads', JSON.stringify(leadsData));
+}
+
+// Broadcast State
+let broadcastTimer = null;
+let broadcastQueue = [];
+let isBroadcasting = false;
+let currentCampaignId = null; // New state for campaign tracking
+let broadcastConfig = {
+    limit: 50,
+    intervalMin: 30,
+    intervalMax: 90,
+    timeStart: "09:00",
+    timeEnd: "18:00",
+    filterStatus: "all"
+};
 
 // DOM Elements
 const excelUpload = document.getElementById('excel-upload');
@@ -80,12 +111,23 @@ function setupEventListeners() {
         });
     });
 
+    // Message Type Selection
+    const typeTags = document.querySelectorAll('.type-tag');
+    typeTags.forEach(tag => {
+        tag.addEventListener('click', () => {
+            typeTags.forEach(t => t.classList.remove('selected'));
+            tag.classList.add('selected');
+        });
+    });
+
     // Save Client Data
     saveClientBtn.addEventListener('click', async () => {
         const selectedTag = document.querySelector('.action-tag.selected');
+        const selectedTypeTag = document.querySelector('.type-tag.selected');
         const description = document.getElementById('modal-action-desc').value;
         const nextActionDate = document.getElementById('modal-next-action-date').value; // Get Date
         const actionText = selectedTag ? selectedTag.getAttribute('data-action') : '';
+        const messageType = selectedTypeTag ? selectedTypeTag.getAttribute('data-type') : 'text';
 
         const leadIndex = leadsData.findIndex(l => l.id === selectedClientId);
         if (leadIndex !== -1) {
@@ -104,7 +146,23 @@ function setupEventListeners() {
             saveLeadToSupabase(updatedLead);
             logActionToSupabase(selectedClientId, actionText, description);
 
+            // NOVO: Notificar n8n sobre a interação
+            const isCustomerMessage = actionText === 'Cliente respondeu';
+
+            sendToN8N('lead_interaction', {
+                lead: updatedLead,
+                action: actionText,
+                message: description, // Padronizado para 'message'
+                details: description,
+                vendedora: JSON.parse(localStorage.getItem('passionpro_session')),
+                fromMe: !isCustomerMessage, // false se for resposta do cliente
+                isGroup: false,
+                isMassSending: false,
+                messageType: messageType // Enviando o tipo capturado (audio, imagem, doc, texto)
+            }).catch(e => console.error('Erro n8n interaction:', e));
+
             updatedLead.lastActionDate = Date.now(); // Update interaction time
+
 
             // Increment contact count for goals tracking
             if (actionText) {
@@ -144,6 +202,32 @@ function setupEventListeners() {
             }
         });
     });
+
+    // AI Tabs Switching
+    const aiTabs = document.querySelectorAll('.ai-tab');
+    aiTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const targetTab = tab.getAttribute('data-ai-tab');
+
+            // UI Update
+            aiTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+
+            // Content Update
+            document.querySelectorAll('.ai-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`ai-tab-${targetTab}`).classList.add('active');
+
+            lucide.createIcons();
+        });
+    });
+
+    // AI File Upload
+    const aiDbUpload = document.getElementById('ai-db-upload');
+    if (aiDbUpload) {
+        aiDbUpload.addEventListener('change', handleAIFileUpload);
+    }
 
     // File Upload
     excelUpload.addEventListener('change', handleFileUpload);
@@ -224,40 +308,65 @@ function setupEventListeners() {
         themeToggle.addEventListener('click', toggleTheme);
     }
 
-    // Profile Edit Form
-    const profileForm = document.getElementById('profile-edit-form');
-    if (profileForm) {
-        profileForm.addEventListener('submit', handleProfileUpdate);
-    }
+    // Broadcast Listeners
+    const broadcastInputs = [
+        'broadcast-limit', 'broadcast-interval-min', 'broadcast-interval-max',
+        'broadcast-time-start', 'broadcast-time-end', 'broadcast-filter-status',
+        'broadcast-filter-type', 'broadcast-filter-city', 'broadcast-filter-date',
+        'broadcast-message', 'broadcast-type', 'broadcast-media-url'
+    ];
+    broadcastInputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', updateBroadcastPreview);
+        if (el) el.addEventListener('change', updateBroadcastPreview);
+    });
 
-    // Add Client Button
-    const addClientBtn = document.getElementById('btn-add-client');
-    if (addClientBtn) {
-        addClientBtn.addEventListener('click', openAddClientModal);
-    }
+    const btnStartBroadcast = document.getElementById('btn-start-broadcast');
+    if (btnStartBroadcast) btnStartBroadcast.addEventListener('click', toggleBroadcast);
 
-    // Add Client Form
-    const addClientForm = document.getElementById('add-client-form');
-    if (addClientForm) {
-        addClientForm.addEventListener('submit', handleAddClient);
-    }
+    const btnSaveBroadcast = document.getElementById('btn-save-broadcast-config');
+    if (btnSaveBroadcast) btnSaveBroadcast.addEventListener('click', saveBroadcastConfig);
 
-    // Edit Client Button
-    const editClientBtn = document.getElementById('btn-edit-client');
-    if (editClientBtn) {
-        editClientBtn.addEventListener('click', toggleEditClientMode);
-    }
+    // Initial Preview update
+    setTimeout(() => {
+        loadBroadcastConfig();
+        updateBroadcastPreview();
+    }, 1000);
+}
 
-    // Profile Photo Upload
-    const photoInput = document.getElementById('profile-photo-input');
-    if (photoInput) {
-        photoInput.addEventListener('change', handlePhotoUpload);
-    }
+// Profile Edit Form
+const profileForm = document.getElementById('profile-edit-form');
+if (profileForm) {
+    profileForm.addEventListener('submit', handleProfileUpdate);
+}
 
-    const removePhotoBtn = document.getElementById('remove-photo-btn');
-    if (removePhotoBtn) {
-        removePhotoBtn.addEventListener('click', removeProfilePhoto);
-    }
+// Add Client Button
+const addClientBtn = document.getElementById('btn-add-client');
+if (addClientBtn) {
+    addClientBtn.addEventListener('click', openAddClientModal);
+}
+
+// Add Client Form
+const addClientForm = document.getElementById('add-client-form');
+if (addClientForm) {
+    addClientForm.addEventListener('submit', handleAddClient);
+}
+
+// Edit Client Button
+const editClientBtn = document.getElementById('btn-edit-client');
+if (editClientBtn) {
+    editClientBtn.addEventListener('click', toggleEditClientMode);
+}
+
+// Profile Photo Upload
+const photoInput = document.getElementById('profile-photo-input');
+if (photoInput) {
+    photoInput.addEventListener('change', handlePhotoUpload);
+}
+
+const removePhotoBtn = document.getElementById('remove-photo-btn');
+if (removePhotoBtn) {
+    removePhotoBtn.addEventListener('click', removeProfilePhoto);
 }
 
 function handleFileUpload(e) {
@@ -304,11 +413,10 @@ function processLeadsData(data) {
                 ? item['DATA DE CADASTRO'].toLocaleDateString('pt-BR')
                 : (item['DATA DE CADASTRO'] || item['Data'] || new Date().toLocaleDateString('pt-BR')),
             status: (item['TIPO DE CLIENTE'] || 'Lead').toUpperCase(),
+            cidade: item['CIDADE'] || item['Cidade'] || 'N/A',
             proximaAcao: 'Analisar perfil para reativação',
             telefone: rawPhone,
             lastAction: '', // Chamei e não respondeu, etc.
-            lastActionDate: (item['DATA DE CADASTRO'] instanceof Date) ? item['DATA DE CADASTRO'].getTime() : Date.now(),
-            details: '',     // Descrição detalhada
             lastActionDate: (item['DATA DE CADASTRO'] instanceof Date) ? item['DATA DE CADASTRO'].getTime() : Date.now(),
             details: '',     // Descrição detalhada
             isMessaged: false, // Novo: rastreia se o WhatsApp foi clicado
@@ -342,6 +450,7 @@ function formatDateBr(dateString) {
 }
 
 function updateFilterOptions() {
+    // Main Status Filter
     const uniqueStatuses = [...new Set(leadsData.map(l => l.status))];
     const currentFilter = statusFilter.value;
     statusFilter.innerHTML = '<option value="all">Todos os Tipos</option>';
@@ -352,6 +461,21 @@ function updateFilterOptions() {
         statusFilter.appendChild(option);
     });
     statusFilter.value = currentFilter;
+
+    // Broadcast City Filter
+    const broadcastCityFilter = document.getElementById('broadcast-filter-city');
+    if (broadcastCityFilter) {
+        const uniqueCities = [...new Set(leadsData.map(l => l.cidade).filter(c => c && c !== 'N/A'))];
+        const currentCity = broadcastCityFilter.value;
+        broadcastCityFilter.innerHTML = '<option value="all">Cidade: Todas</option>';
+        uniqueCities.sort().forEach(city => {
+            const option = document.createElement('option');
+            option.value = city;
+            option.textContent = city;
+            broadcastCityFilter.appendChild(option);
+        });
+        broadcastCityFilter.value = currentCity;
+    }
 }
 
 function filterLeads() {
@@ -360,8 +484,16 @@ function filterLeads() {
     const actionValue = actionFilter ? actionFilter.value : 'all';
 
     return leadsData.filter(lead => {
-        const matchesSearch = lead.nome.toLowerCase().includes(searchTerm);
-        const matchesFilter = filterValue === 'all' || lead.status === filterValue;
+        const matchesSearch = lead.nome.toLowerCase().includes(searchTerm) ||
+            (lead.telefone && String(lead.telefone).includes(searchTerm));
+
+        // Status matching (flexível)
+        let matchesFilter = filterValue === 'all';
+        if (!matchesFilter) {
+            const lStatus = (lead.status || '').toUpperCase();
+            const fValue = filterValue.toUpperCase();
+            matchesFilter = lStatus === fValue || lStatus.includes(fValue) || fValue.includes(lStatus);
+        }
 
         // Action filter logic
         let matchesAction = true;
@@ -386,7 +518,7 @@ function renderTable() {
     if (totalItems === 0) {
         tableBody.innerHTML = `
             <tr class="empty-state">
-                <td colspan="5">
+                <td colspan="6">
                     <div class="empty-content">
                         <i data-lucide="search-slash"></i>
                         <p>${leadsData.length === 0 ? 'Nenhum dado importado.' : 'Nenhum resultado encontrado.'}</p>
@@ -559,10 +691,10 @@ window.changePage = function (page) {
 
 function getStatusClass(status) {
     const s = status.toUpperCase();
-    if (s.includes('REVENDEDOR')) return 'status-novo';
-    if (s.includes('LOJISTA')) return 'status-conversa';
-    if (s.includes('USO PRÓPRIO')) return 'status-antigo';
-    if (s.includes('CIDADE EXCLUSIVA')) return 'status-fechado';
+    if (s.includes('REVENDEDOR') || s.includes('NOVO')) return 'status-novo';
+    if (s.includes('LOJISTA') || s.includes('CONVERSA')) return 'status-conversa';
+    if (s.includes('USO PRÓPRIO') || s.includes('ANTIGO')) return 'status-antigo';
+    if (s.includes('CIDADE EXCLUSIVA') || s.includes('FECHADO')) return 'status-fechado';
     return 'status-antigo';
 }
 
@@ -663,6 +795,11 @@ window.filterInactiveLeads = function () {
 function switchSection(sectionId) {
     navItems.forEach(nav => nav.classList.toggle('active', nav.getAttribute('data-section') === sectionId));
     sections.forEach(section => section.classList.toggle('active', section.id === `section-${sectionId}`));
+
+    if (sectionId === 'ai-config') {
+        loadAIConfig();
+        loadAIDocuments();
+    }
 
     if (sectionId === 'contacted') {
         renderContactedTable();
@@ -765,6 +902,13 @@ function openClientModal(clientId) {
     actionTags.forEach(tag => {
         tag.classList.toggle('selected', tag.getAttribute('data-action') === lead.lastAction);
     });
+
+    // Reset Type Selection to 'text' default
+    const typeTags = document.querySelectorAll('.type-tag');
+    typeTags.forEach(tag => {
+        tag.classList.toggle('selected', tag.getAttribute('data-type') === 'text');
+    });
+
     document.getElementById('modal-action-desc').value = lead.details || '';
 
     // Preenche campos de visualização
@@ -813,7 +957,7 @@ function renderContactedTable() {
     if (contactedLeads.length === 0) {
         contactedTableBody.innerHTML = `
             <tr class="empty-state">
-                <td colspan="4">
+                <td colspan="5">
                     <div class="empty-content">
                         <i data-lucide="message-square-dashed"></i>
                         <p>${searchTerm ? 'Nenhum resultado para esta busca.' : 'Nenhum contato realizado ainda.'}</p>
@@ -1116,10 +1260,12 @@ function applyRolePermissions(role) {
     if (role === 'vendedora') {
         if (clearDataBtn) clearDataBtn.style.display = 'none';
         if (navAdmin) navAdmin.style.display = 'none';
+        if (document.getElementById('nav-ai-config')) document.getElementById('nav-ai-config').style.display = 'none';
         if (navContacted) navContacted.style.display = 'flex';
     } else if (role === 'admin') {
         if (clearDataBtn) clearDataBtn.style.display = 'flex';
         if (navAdmin) navAdmin.style.display = 'flex';
+        if (document.getElementById('nav-ai-config')) document.getElementById('nav-ai-config').style.display = 'flex';
         if (navContacted) navContacted.style.display = 'none'; // Admin não vê contatados
     } else {
         if (clearDataBtn) clearDataBtn.style.display = 'flex';
@@ -1142,17 +1288,42 @@ async function loadLeadsFromSupabase() {
     if (!session) return;
 
     try {
-        const { data, error } = await _supabase
-            .from('leads_followup')
-            .select('*')
-            .order('id', { ascending: false });
+        const profile = JSON.parse(localStorage.getItem('passionpro_session'));
 
-        leadsData = data || [];
+        let query = _supabase.from('leads_followup').select('*');
+        if (profile && profile.role !== 'admin') {
+            query = query.eq('vendedora_id', session.user.id);
+        }
+
+        const { data: cloudLeads, error } = await query.order('id', { ascending: false });
+
+        if (error) throw error;
+
+        // MERGE: Mantém o que tem no local (manuais recentes) e junta com o da nuvem
+        // Evita que o F5 apague o que foi cadastrado e ainda não sincronizou totalmente
+        const localLeads = JSON.parse(localStorage.getItem('passionpro_leads') || '[]');
+
+        // Criar um Map por ID para evitar duplicados, priorizando o dado da nuvem
+        const leadsMap = new Map();
+
+        // Primeiro insere os locais
+        localLeads.forEach(l => leadsMap.set(String(l.id), l));
+        // Sobrescreve com os da nuvem (mais oficiais)
+        if (cloudLeads) {
+            cloudLeads.forEach(l => leadsMap.set(String(l.id), l));
+        }
+
+        leadsData = Array.from(leadsMap.values());
+        leadsData.sort((a, b) => (b.lastActionDate || 0) - (a.lastActionDate || 0));
+
         filteredData = [...leadsData];
+        saveLeadsToLocal();
 
         // Atualiza status visual
-        document.getElementById('db-status-dot').style.background = '#10b981';
-        document.getElementById('db-status-text').textContent = 'Nuvem Online';
+        const statusDot = document.getElementById('db-status-dot');
+        const statusText = document.getElementById('db-status-text');
+        if (statusDot) statusDot.style.background = '#10b981';
+        if (statusText) statusText.textContent = 'Nuvem Online';
 
         updateFilterOptions();
         updateStats();
@@ -1172,13 +1343,21 @@ async function saveLeadToSupabase(lead) {
         // Vincula o lead à vendedora antes de salvar
         const leadToSync = { ...lead, vendedora_id: session.user.id };
 
+        console.log('Sincronizando lead com Supabase:', leadToSync);
+
         const { error } = await _supabase
             .from('leads_followup')
             .upsert([leadToSync]);
 
-        if (error) throw error;
+        if (error) {
+            console.error('Erro retornado pelo Supabase:', error);
+            throw error;
+        }
+
+        console.log('Lead sincronizado com sucesso!');
     } catch (e) {
         console.error('Erro ao salvar lead na nuvem:', e.message);
+        showNotification('Erro ao sincronizar com a nuvem: ' + e.message, 'error');
     }
 }
 
@@ -1289,24 +1468,31 @@ async function handleAddClient(e) {
     // Limpa o telefone para usar como ID
     const phoneId = phone.replace(/\D/g, '');
 
+    const session = JSON.parse(localStorage.getItem('passionpro_session'));
+
     const newLead = {
-        id: phoneId ? parseInt(phoneId) : Date.now(),
+        id: phoneId ? Number(phoneId) : Date.now(), // Garantir que ID seja numérico para o BIGINT do Supabase
         nome: name,
         telefone: phone,
         email: email || 'N/A',
+        cidade: 'Manual', // Campo que faltava e pode estar como NOT NULL no banco
         dataCadastro: new Date().toLocaleDateString('pt-BR'),
-        status: status,
+        status: status.toUpperCase(), // Padronizar para maiúsculas como na planilha
+        vendedora_id: session ? session.id : null,
         proximaAcao: 'Primeiro contato',
         lastAction: notes || 'Cliente cadastrado manualmente',
         lastActionDate: Date.now(),
         details: notes || '',
         isMessaged: false,
-        nextActionDate: new Date().toISOString().split('T')[0] // Default to today
+        nextActionDate: new Date().toISOString().split('T')[0]
     };
 
     // Adiciona ao array local
     leadsData.unshift(newLead);
     filteredData = filterLeads();
+
+    // Sincroniza cache local para persistência imediata
+    saveLeadsToLocal();
 
     // Salva no Supabase
     await saveLeadToSupabase(newLead);
@@ -1374,6 +1560,9 @@ window.saveClientEdit = async function () {
 
     // Salva no Supabase
     await saveLeadToSupabase(lead);
+
+    // Sincroniza cache local
+    saveLeadsToLocal();
 
     // Atualiza UI
     filteredData = filterLeads();
@@ -1891,3 +2080,901 @@ async function incrementContactCount() {
         console.error('Erro ao atualizar contador:', e);
     }
 }
+
+// --- AI AGENT CONFIGURATION ---
+
+const DEFAULT_SYSTEM_PROMPT = `Você é um assistente comercial de alta performance da PassionPro.
+Sua missão é atender leads, tirar dúvidas sobre os produtos e converter em vendas.
+Mantenha sempre um tom profissional e prestativo.`;
+
+async function loadAIConfig() {
+    try {
+        const { data, error } = await _supabase
+            .from('ai_agent_config')
+            .select('*')
+            .maybeSingle();
+
+        if (error) throw error;
+
+        if (data) {
+            document.getElementById('ai-personality').value = data.agent_personality || '';
+            document.getElementById('ai-characteristics').value = data.agent_characteristics || '';
+            document.getElementById('ai-tone').value = data.tone_of_voice || 'elegant';
+            document.getElementById('ai-voice-enabled').checked = data.enable_voice || false;
+            document.getElementById('ai-voice-provider').value = data.voice_provider || 'elevenlabs';
+            document.getElementById('ai-voice-style').value = data.voice_speed_style || '';
+            document.getElementById('ai-system-prompt').value = data.system_prompt || DEFAULT_SYSTEM_PROMPT;
+
+            // WhatsApp Fields
+            if (document.getElementById('wa-api-platform')) document.getElementById('wa-api-platform').value = data.wa_api_platform || 'evolution';
+            if (document.getElementById('wa-instance-name')) document.getElementById('wa-instance-name').value = data.wa_instance_name || '';
+            if (document.getElementById('wa-api-url')) document.getElementById('wa-api-url').value = data.wa_api_url || '';
+            if (document.getElementById('wa-api-key')) document.getElementById('wa-api-key').value = data.wa_api_key || '';
+        } else {
+
+            document.getElementById('ai-system-prompt').value = DEFAULT_SYSTEM_PROMPT;
+        }
+    } catch (e) {
+        console.error('Erro ao carregar config IA:', e);
+    }
+}
+
+async function saveAIConfig() {
+    const config = {
+        agent_personality: document.getElementById('ai-personality').value,
+        agent_characteristics: document.getElementById('ai-characteristics').value,
+        tone_of_voice: document.getElementById('ai-tone').value,
+        enable_voice: document.getElementById('ai-voice-enabled').checked,
+        voice_provider: document.getElementById('ai-voice-provider').value,
+        voice_id: document.getElementById('ai-voice-id').value,
+        voice_speed_style: document.getElementById('ai-voice-style').value,
+        system_prompt: document.getElementById('ai-system-prompt').value,
+        wa_api_platform: document.getElementById('wa-api-platform')?.value,
+        wa_instance_name: document.getElementById('wa-instance-name')?.value,
+        wa_api_url: document.getElementById('wa-api-url')?.value,
+        wa_api_key: document.getElementById('wa-api-key')?.value,
+        updated_at: new Date().toISOString()
+    };
+
+
+    try {
+        const { data: existing } = await _supabase.from('ai_agent_config').select('id').maybeSingle();
+
+        let error;
+        if (existing) {
+            const result = await _supabase
+                .from('ai_agent_config')
+                .update(config)
+                .eq('id', existing.id);
+            error = result.error;
+        } else {
+            const result = await _supabase
+                .from('ai_agent_config')
+                .insert([config]);
+            error = result.error;
+        }
+
+        if (error) throw error;
+        showNotification('Configurações da IA salvas!', 'success');
+    } catch (e) {
+        console.error('Erro ao salvar config IA:', e);
+        showNotification('Erro ao salvar configurações', 'error');
+    }
+}
+
+window.restoreDefaultPrompt = function () {
+    if (confirm('Deseja realmente restaurar o prompt padrão?')) {
+        document.getElementById('ai-system-prompt').value = DEFAULT_SYSTEM_PROMPT;
+    }
+}
+
+window.testWhatsAppConnection = async function () {
+    const platform = document.getElementById('wa-api-platform').value;
+    const url = document.getElementById('wa-api-url').value;
+    const key = document.getElementById('wa-api-key').value;
+    const instance = document.getElementById('wa-instance-name').value;
+
+    if (!url) {
+        showNotification('Informe a URL da API para testar.', 'error');
+        return;
+    }
+
+    showNotification('Testando conexão com WhatsApp...', 'info');
+
+    try {
+        // Notifica o n8n sobre o teste para validação inteligente
+        const result = await sendToN8N('test_whatsapp', {
+            platform, url, instance, key,
+            fromMe: true
+        });
+
+        if (result.status === 'success' || result.connected) {
+            showNotification('WhatsApp conectado com sucesso!', 'success');
+        } else {
+            showNotification('Erro: n8n não conseguiu validar a instância.', 'error');
+        }
+    } catch (e) {
+        // Fallback local simples se o n8n falhar
+        try {
+            const response = await fetch(`${url}/instance/status/${instance}`, {
+                headers: { 'apikey': key }
+            });
+            if (response.ok) {
+                showNotification('Instância online (validação direta)!', 'success');
+            } else {
+                throw new Error('Falha na resposta da API');
+            }
+        } catch (localErr) {
+            showNotification('Falha ao conectar: ' + localErr.message, 'error');
+        }
+    }
+}
+
+
+window.testAIResponse = async function () {
+    console.log('testAIResponse called');
+    const inputEl = document.getElementById('ai-test-input');
+    const input = inputEl ? inputEl.value : '';
+
+    if (!input.trim()) {
+        showNotification('Digite uma pergunta para o agente teste!', 'error');
+        return;
+    }
+
+    const outputContainer = document.getElementById('ai-test-output');
+    const outputContent = document.getElementById('ai-test-output-content');
+
+    if (outputContainer) {
+        outputContainer.style.display = 'block';
+        outputContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    if (outputContent) {
+        outputContent.innerHTML = '<div class="typing-sim">O agente de IA (n8n) está processando sua resposta...</div>';
+    }
+
+    // Capture configurations
+    const personality = document.getElementById('ai-personality').value || '[Não definida]';
+    const toneSelect = document.getElementById('ai-tone');
+    const tone = toneSelect ? toneSelect.options[toneSelect.selectedIndex].text : 'Padrão';
+
+    try {
+        const responseData = await sendToN8N('ai_test', {
+            message: input, // Padronizado para 'message'
+            prompt: input,
+            personality: personality,
+            tone: tone,
+            system_prompt: document.getElementById('ai-system-prompt').value,
+            fromMe: true,
+            messageType: 'text'
+        });
+
+        if (outputContent) {
+            // Supondo que o n8n retorne um campo 'output' ou 'response'
+            const responseText = responseData?.output || responseData?.response || responseData?.text ||
+                "Resposta recebida do n8n, mas o formato não foi reconhecido. Verifique seu workflow.";
+
+            outputContent.innerHTML = `
+                <div style="line-height: 1.5; color: var(--text-main);">
+                    <p>🤖 <strong>Resposta do Agente de IA:</strong></p>
+                    <div style="margin-top: 10px; padding: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
+                        ${responseText}
+                    </div>
+                </div>
+            `;
+        }
+    } catch (e) {
+        if (outputContent) {
+            outputContent.innerHTML = `<div style="color: #ef4444;">Erro ao conectar com n8n: ${e.message}</div>`;
+        }
+    }
+}
+
+async function handleAIFileUpload(e) {
+    console.log('handleAIFileUpload triggered');
+    const files = e.target.files;
+    if (!files || files.length === 0) {
+        console.log('No files selected');
+        return;
+    }
+
+    showNotification(`Iniciando upload de ${files.length} arquivo(s)...`, 'info');
+
+    for (const file of files) {
+        try {
+            const filePath = `ai_knowledge_base/${Date.now()}_${file.name}`;
+            console.log(`Uploading file: ${file.name} to path: ${filePath}`);
+            const { data: uploadData, error: uploadError } = await _supabase.storage
+                .from('ai_files')
+                .upload(filePath, file);
+
+            if (uploadError) {
+                console.error('Storage Upload Error:', uploadError);
+                if (uploadError.message.includes('bucket not found')) {
+                    throw new Error('O bucket "ai_files" não foi encontrado no seu Supabase. Crie-o na aba Storage.');
+                }
+                throw uploadError;
+            }
+
+            console.log('Upload successful, inserting into database...');
+
+            const { error: dbError } = await _supabase
+                .from('ai_agent_documents')
+                .insert([{
+                    file_name: file.name,
+                    file_type: file.type || file.name.split('.').pop(),
+                    file_size: file.size,
+                    storage_path: filePath,
+                    is_active: true
+                }]);
+
+            if (dbError) throw dbError;
+
+        } catch (e) {
+            console.error('Erro no upload do arquivo:', file.name, e);
+            showNotification(`Erro ao enviar ${file.name}: ${e.message}`, 'error');
+        }
+    }
+
+    loadAIDocuments();
+    showNotification('Base de conhecimento atualizada!', 'success');
+}
+
+async function loadAIDocuments() {
+    try {
+        const { data, error } = await _supabase
+            .from('ai_agent_documents')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        aiDocuments = data || []; // Update global state
+        renderAIDocuments(data);
+    } catch (e) {
+        console.error('Erro ao carregar documentos:', e);
+    }
+}
+
+function renderAIDocuments(docs) {
+    const tbody = document.getElementById('ai-documents-table-body');
+    if (!tbody) return;
+
+    if (!docs || docs.length === 0) {
+        tbody.innerHTML = `
+            <tr class="empty-state">
+                <td colspan="5">
+                    <div class="empty-content">
+                        <i data-lucide="file-text"></i>
+                        <p>Nenhum documento enviado ainda.</p>
+                    </div>
+                </td>
+            </tr>
+        `;
+        lucide.createIcons();
+        return;
+    }
+
+    tbody.innerHTML = docs.map(doc => `
+        <tr>
+            <td>
+                <div style="font-weight: 600;">${doc.file_name}</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">${(doc.file_size / 1024).toFixed(1)} KB</div>
+            </td>
+            <td>${doc.file_type.toUpperCase()}</td>
+            <td>${new Date(doc.created_at).toLocaleDateString('pt-BR')}</td>
+            <td>
+                <label class="switch" style="transform: scale(0.8);">
+                    <input type="checkbox" ${doc.is_active ? 'checked' : ''} onchange="toggleAIDocument(${doc.id}, this.checked)">
+                    <span class="slider round"></span>
+                </label>
+            </td>
+            <td class="text-right">
+                <button class="btn-icon" style="color: #ef4444;" onclick="deleteAIDocument(${doc.id}, '${doc.storage_path}')">
+                    <i data-lucide="trash-2"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+    lucide.createIcons();
+}
+
+window.toggleAIDocument = async function (id, isActive) {
+    try {
+        await _supabase.from('ai_agent_documents').update({ is_active: isActive }).eq('id', id);
+        // Sync local state
+        const docIndex = aiDocuments.findIndex(d => d.id === id);
+        if (docIndex !== -1) {
+            aiDocuments[docIndex].is_active = isActive;
+        }
+    } catch (e) {
+        showNotification('Erro ao atualizar documento', 'error');
+    }
+}
+
+window.deleteAIDocument = async function (id, path) {
+    if (!confirm('Tem certeza que deseja excluir este documento?')) return;
+    try {
+        await _supabase.storage.from('ai_files').remove([path]);
+        await _supabase.from('ai_agent_documents').delete().eq('id', id);
+        loadAIDocuments();
+        showNotification('Documento excluído', 'success');
+    } catch (e) {
+        showNotification('Erro ao excluir documento', 'error');
+    }
+}
+
+// --- PROMPT PREVIEW LOGIC ---
+
+window.openPromptPreview = function () {
+    const personality = document.getElementById('ai-personality').value || '[Não configurado]';
+    const characteristics = document.getElementById('ai-characteristics').value || '[Não configurado]';
+    const toneSelect = document.getElementById('ai-tone');
+    const tone = toneSelect.options[toneSelect.selectedIndex].text;
+    const systemPrompt = document.getElementById('ai-system-prompt').value || '[Vazio]';
+
+    // Get active documents from local state
+    const activeDocs = aiDocuments
+        .filter(doc => doc.is_active)
+        .map(doc => doc.file_name);
+
+    const docsText = activeDocs.length > 0
+        ? activeDocs.join('\n- ')
+        : 'Nenhum documento ativo no momento.';
+
+    const finalPrompt = `Você é um agente configurado com:
+Personalidade: ${personality}
+Características: ${characteristics}
+Tom de voz: ${tone}
+
+Instruções principais:
+${systemPrompt}
+
+Base de conhecimento disponível:
+- ${docsText}`;
+
+    document.getElementById('final-prompt-text').textContent = finalPrompt;
+    document.getElementById('prompt-preview-modal').classList.add('active');
+    lucide.createIcons();
+}
+
+window.closePromptPreview = function () {
+    document.getElementById('prompt-preview-modal').classList.remove('active');
+}
+
+window.copyFinalPrompt = function () {
+    const text = document.getElementById('final-prompt-text').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        showNotification('Prompt copiado para a área de transferência!', 'success');
+    }).catch(err => {
+        console.error('Erro ao copiar:', err);
+        showNotification('Erro ao copiar prompt', 'error');
+    });
+}
+
+window.testAIWithKnowledgeBase = async function () {
+    const inputEl = document.getElementById('ai-test-input');
+    const input = inputEl ? inputEl.value : '';
+
+    if (!input.trim()) {
+        showNotification('Digite uma pergunta para testar com a base!', 'error');
+        return;
+    }
+
+    const activeDocs = aiDocuments.filter(d => d.is_active);
+    if (activeDocs.length === 0) {
+        showNotification('Nenhum documento ativo na base de dados!', 'warning');
+        return;
+    }
+
+    const outputContainer = document.getElementById('ai-test-output');
+    const outputContent = document.getElementById('ai-test-output-content');
+
+    if (outputContainer) {
+        outputContainer.style.display = 'block';
+        outputContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    if (outputContent) {
+        outputContent.innerHTML = '<div class="typing-sim">O n8n está consultando sua Base de Conhecimento RAG...</div>';
+    }
+
+    try {
+        const responseData = await sendToN8N('ai_knowledge_query', {
+            message: input, // Padronizado para 'message'
+            prompt: input,
+            documents: activeDocs,
+            system_prompt: document.getElementById('ai-system-prompt').value,
+            fromMe: true,
+            messageType: 'text'
+        });
+
+        if (outputContent) {
+            const responseText = responseData?.output || responseData?.response || responseData?.text ||
+                "Resposta RAG recebida do n8n, mas o formato não foi reconhecido.";
+
+            outputContent.innerHTML = `
+                <div style="line-height: 1.5; color: var(--text-main);">
+                    <p>📚 <strong>Resposta Baseada em Conhecimento (n8n):</strong></p>
+                    <div style="margin-top: 10px; padding: 1rem; background: rgba(16, 185, 129, 0.1); border-left: 4px solid var(--status-reativado); border-radius: 8px;">
+                        ${responseText}
+                    </div>
+                </div>
+            `;
+        }
+    } catch (e) {
+        if (outputContent) {
+            outputContent.innerHTML = `<div style="color: #ef4444;">Erro RAG ao conectar com n8n: ${e.message}</div>`;
+        }
+    }
+}
+
+// --- BROADCAST LOGIC ---
+
+function updateBroadcastPreview() {
+    const limitInput = document.getElementById('broadcast-limit');
+    const intervalMinInput = document.getElementById('broadcast-interval-min');
+    const intervalMaxInput = document.getElementById('broadcast-interval-max');
+    const filterStatusInput = document.getElementById('broadcast-filter-status');
+    const timeStartInput = document.getElementById('broadcast-time-start');
+    const timeEndInput = document.getElementById('broadcast-time-end');
+
+    if (!limitInput) return;
+
+    const limit = parseInt(limitInput.value) || 50;
+    const intervalMin = parseInt(intervalMinInput.value) || 30;
+    const intervalMax = parseInt(intervalMaxInput.value) || 90;
+    const filterStatus = filterStatusInput.value;
+
+    // Filter leads
+    const filterType = document.getElementById('broadcast-filter-type')?.value || 'all';
+    const filterCity = document.getElementById('broadcast-filter-city')?.value || 'all';
+    const filterDate = document.getElementById('broadcast-filter-date')?.value || '';
+
+    let eligibleLeads = leadsData.filter(l => {
+        // Status Filter
+        let matchStatus = filterStatus === 'all';
+        if (!matchStatus) {
+            const lStatus = (l.status || '').toUpperCase();
+            const fStatus = filterStatus.toUpperCase();
+            matchStatus = lStatus === fStatus || lStatus.includes(fStatus) || fStatus.includes(lStatus);
+        }
+
+        // Type Filter (some sheets use status as type)
+        let matchType = filterType === 'all';
+        if (!matchType) {
+            const lStatus = (l.status || '').toUpperCase();
+            matchType = lStatus.includes(filterType.toUpperCase());
+        }
+
+        // City Filter
+        let matchCity = filterCity === 'all';
+        if (!matchCity) {
+            matchCity = l.cidade === filterCity;
+        }
+
+        // Date Filter (simple string check for now)
+        let matchDate = !filterDate;
+        if (filterDate) {
+            const fDate = new Date(filterDate).toLocaleDateString('pt-BR');
+            matchDate = l.dataCadastro === fDate;
+        }
+
+        return matchStatus && matchType && matchCity && matchDate;
+    });
+
+    const count = Math.min(eligibleLeads.length, limit);
+    const avgInterval = (intervalMin + intervalMax) / 2;
+    const totalMinutes = Math.round((count * avgInterval) / 60);
+
+    const previewCountEl = document.getElementById('broadcast-preview-count');
+    const previewTimeEl = document.getElementById('broadcast-preview-time');
+
+    if (previewCountEl) previewCountEl.textContent = isBroadcasting ? broadcastQueue.length : count;
+    if (previewTimeEl) previewTimeEl.textContent = totalMinutes > 60
+        ? `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}min`
+        : `${totalMinutes} min`;
+
+    broadcastConfig = {
+        limit,
+        intervalMin,
+        intervalMax,
+        timeStart: timeStartInput.value,
+        timeEnd: timeEndInput.value,
+        filterStatus,
+        message: document.getElementById('broadcast-message')?.value || '',
+        messageType: document.getElementById('broadcast-type')?.value || 'text',
+        mediaUrl: document.getElementById('broadcast-media-url')?.value || ''
+    };
+}
+
+window.toggleMediaUrlField = function () {
+    const type = document.getElementById('broadcast-type').value;
+    const mediaGroup = document.getElementById('media-url-group');
+    if (mediaGroup) {
+        mediaGroup.style.display = type === 'text' ? 'none' : 'block';
+    }
+    updateBroadcastPreview();
+}
+
+
+window.insertVar = function (variable) {
+    const textarea = document.getElementById('broadcast-message');
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const before = text.substring(0, start);
+    const after = text.substring(end, text.length);
+
+    textarea.value = before + variable + after;
+    textarea.focus();
+    textarea.selectionStart = textarea.selectionEnd = start + variable.length;
+    updateBroadcastPreview();
+}
+
+
+function saveBroadcastConfig() {
+    updateBroadcastPreview();
+    localStorage.setItem('passionpro_broadcast_config', JSON.stringify(broadcastConfig));
+    showNotification('Configuração de disparo salva!', 'success');
+}
+
+function toggleBroadcast() {
+    if (isBroadcasting) {
+        stopBroadcast();
+    } else {
+        startBroadcast();
+    }
+}
+
+async function startBroadcast() {
+    updateBroadcastPreview();
+
+    if (leadsData.length === 0) {
+        showNotification('Importe uma planilha primeiro!', 'error');
+        return;
+    }
+
+    const filterStatus = broadcastConfig.filterStatus;
+    const filterType = document.getElementById('broadcast-filter-type')?.value || 'all';
+    const filterCity = document.getElementById('broadcast-filter-city')?.value || 'all';
+    const filterDate = document.getElementById('broadcast-filter-date')?.value || '';
+
+    let eligibleLeads = leadsData.filter(l => {
+        // Status Filter
+        let matchStatus = filterStatus === 'all';
+        if (!matchStatus) {
+            const lStatus = (l.status || '').toUpperCase();
+            const fStatus = filterStatus.toUpperCase();
+            matchStatus = lStatus === fStatus || lStatus.includes(fStatus) || fStatus.includes(lStatus);
+        }
+
+        // Type Filter
+        let matchType = filterType === 'all';
+        if (!matchType) {
+            const lStatus = (l.status || '').toUpperCase();
+            matchType = lStatus.includes(filterType.toUpperCase());
+        }
+
+        // City Filter
+        let matchCity = filterCity === 'all';
+        if (!matchCity) {
+            matchCity = l.cidade === filterCity;
+        }
+
+        // Date Filter
+        let matchDate = !filterDate;
+        if (filterDate) {
+            const fDate = new Date(filterDate).toLocaleDateString('pt-BR');
+            matchDate = l.dataCadastro === fDate;
+        }
+
+        return matchStatus && matchType && matchCity && matchDate;
+    });
+
+    broadcastQueue = eligibleLeads.slice(0, broadcastConfig.limit);
+
+    if (broadcastQueue.length === 0) {
+        showNotification('Nenhum contato elegível para os filtros selecionados.', 'warning');
+        return;
+    }
+
+    // 1. Criar registro da Campanha no Supabase para rastreamento
+    try {
+        const campaignNameInput = document.getElementById('broadcast-campaign-name');
+        const campaignName = (campaignNameInput && campaignNameInput.value) ? campaignNameInput.value : `Campanha ${new Date().toLocaleString('pt-BR')}`;
+
+        const { data: campaign, error } = await _supabase.from('campaigns').insert([{
+            name: campaignName,
+            message_template: broadcastConfig.message,
+            status: 'active'
+        }]).select().single();
+
+        if (error) throw error;
+        currentCampaignId = campaign.id;
+        console.log('Campanha iniciada com ID:', currentCampaignId);
+    } catch (err) {
+        console.error('Erro ao criar campanha:', err);
+        showNotification('Erro ao iniciar rastreamento de campanha. O disparo continuará sem rastreio.', 'warning');
+        currentCampaignId = null;
+    }
+
+    isBroadcasting = true;
+    const btn = document.getElementById('btn-start-broadcast');
+    if (btn) {
+        btn.innerHTML = '<i data-lucide="pause-circle"></i> Parar Disparo';
+        btn.style.background = 'var(--status-sumiu)';
+        lucide.createIcons();
+    }
+
+    showNotification(`Iniciando disparo para ${broadcastQueue.length} contatos...`, 'info');
+    runBroadcastCycle();
+}
+
+function stopBroadcast() {
+    isBroadcasting = false;
+    if (broadcastTimer) clearTimeout(broadcastTimer);
+
+    const btn = document.getElementById('btn-start-broadcast');
+    if (btn) {
+        btn.innerHTML = '<i data-lucide="play-circle"></i> Iniciar Disparo';
+        btn.style.background = 'var(--status-novo)';
+        lucide.createIcons();
+    }
+
+    showNotification('Disparo finalizado ou interrompido.', 'warning');
+    updateBroadcastPreview();
+}
+
+async function runBroadcastCycle() {
+    if (!isBroadcasting || broadcastQueue.length === 0) {
+        if (broadcastQueue.length === 0 && isBroadcasting) {
+            showNotification('Disparo concluído!', 'success');
+
+            // Atualizar status da campanha para finalizada
+            if (currentCampaignId) {
+                _supabase.from('campaigns').update({ status: 'finished' }).eq('id', currentCampaignId)
+                    .then(() => console.log('Campanha marcada como finalizada.'))
+                    .catch(err => console.error('Erro ao finalizar campanha:', err));
+            }
+
+            // Webhook de finalização
+            sendToN8N('broadcast_finished', {
+                config: broadcastConfig,
+                campaignId: currentCampaignId,
+                fromMe: true,
+                isGroup: false,
+                timestamp: new Date().toISOString()
+            }).catch(e => console.error('Erro ao enviar finalização para n8n:', e));
+
+            stopBroadcast();
+        }
+        return;
+    }
+
+
+    // Check time window
+    const now = new Date();
+    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+    if (currentTime < broadcastConfig.timeStart || currentTime > broadcastConfig.timeEnd) {
+        console.log('Outside time window, waiting 1 minute...');
+        broadcastTimer = setTimeout(runBroadcastCycle, 60000);
+        return;
+    }
+
+    // Proccess one lead
+    const lead = broadcastQueue.shift();
+
+    // Processar variáveis na mensagem
+    let finalMessage = broadcastConfig.message || '';
+    if (finalMessage) {
+        finalMessage = finalMessage
+            .replace(/{{nome}}/g, lead.nome || '')
+            .replace(/{{tipo}}/g, lead.status || '')
+            .replace(/{{cidade}}/g, lead.cidade || '')
+            .replace(/{{telefone}}/g, lead.telefone || '')
+            .replace(/{{proxima_acao}}/g, lead.nextActionDate ? formatDateBr(lead.nextActionDate) : '');
+    }
+
+    console.log(`Enviando lead para processamento no n8n: ${lead.nome}`);
+
+    // Integração com n8n para o disparo
+    try {
+        // Registrar o envio individual (dispatch) no Supabase
+        let dispatchId = null;
+        if (currentCampaignId) {
+            try {
+                const { data: dispatch, error: dError } = await _supabase.from('campaign_dispatches').insert([{
+                    campaign_id: currentCampaignId,
+                    contact_phone: (lead.telefone || '').replace(/\D/g, ''),
+                    status: 'sent',
+                    sent_at: new Date().toISOString()
+                }]).select().single();
+
+                if (dispatch) dispatchId = dispatch.id;
+            } catch (de) {
+                console.error('Erro ao criar registro de dispatch:', de);
+            }
+        }
+
+        await sendToN8N('broadcast_lead', {
+            lead: lead,
+            message: finalMessage,
+            rawMessage: broadcastConfig.message,
+            config: broadcastConfig,
+            campaignId: currentCampaignId,
+            dispatchId: dispatchId,
+            vendedora: JSON.parse(localStorage.getItem('passionpro_session')),
+            fromMe: true,
+            isGroup: false,
+            isMassSending: true, // Identifica envio em massa
+            messageType: broadcastConfig.messageType || 'text',
+            mediaUrl: broadcastConfig.mediaUrl || ''
+        });
+    } catch (error) {
+        console.error('Falha no envio do lead para o n8n:', error);
+        // Continuamos o ciclo mesmo se um falhar
+    }
+
+
+    await incrementContactCount();
+    updateBroadcastPreview(); // Update numbers in UI
+
+    // Schedule next
+    const intMin = parseInt(broadcastConfig.intervalMin) || 30;
+    const intMax = parseInt(broadcastConfig.intervalMax) || 90;
+    const randomInterval = Math.floor(Math.random() * (intMax - intMin + 1)) + intMin;
+    console.log(`Próximo envio em ${randomInterval} segundos`);
+    broadcastTimer = setTimeout(runBroadcastCycle, randomInterval * 1000);
+}
+
+// Helper to send data to n8n
+async function sendToN8N(event, data) {
+    // Detect if running via file:// protocol
+    if (window.location.protocol === 'file:') {
+        console.warn('⚠️ Alerta: Você está executando o sistema via protocolo file://. Isso pode causar erros de CORS com o n8n.');
+    }
+
+    const fromMe = data.fromMe === true;
+    const isGroup = data.isGroup === true;
+
+    const targetUrl = getN8nUrl();
+    console.group(`n8n Request: ${event}`);
+    console.log('URL:', targetUrl);
+    console.log('Payload:', data);
+
+    try {
+        const response = await fetch(targetUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                event: event,
+                fromMe: fromMe,
+                isGroup: isGroup,
+                data: data,
+                timestamp: new Date().toISOString()
+            })
+        });
+
+        console.log('Response Status:', response.status);
+        console.groupEnd();
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Erro n8n (${response.status}): ${errorText || 'Sem resposta'}`);
+        }
+
+        const text = await response.text();
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            return { message: text };
+        }
+    } catch (e) {
+        console.error('Erro ao enviar para n8n:', e);
+        console.groupEnd();
+        if (e.message.includes('Failed to fetch')) {
+            let msg = 'Erro de Conexão: Bloqueio de Segurança (CORS) ou URL inválida.';
+            if (window.location.protocol === 'file:') {
+                msg = 'Erro: O navegador bloqueou o envio porque o arquivo está aberto localmente. Tente rodar como servidor local ou verifique o CORS do n8n.';
+            }
+            showNotification(msg, 'error');
+        } else {
+            showNotification(`Erro n8n: ${e.message}`, 'error');
+        }
+        throw e;
+    }
+}
+
+// Helper to toggle n8n test/prod mode
+window.toggleN8nMode = function (isTest) {
+    isN8nTestMode = isTest;
+    const urlInput = document.getElementById('n8n-webhook-url');
+    const badge = document.getElementById('n8n-status-badge');
+    const badgeText = badge ? badge.querySelector('span') : null;
+
+    if (isTest) {
+        if (urlInput) {
+            urlInput.value = urlInput.value.replace('/webhook/', '/webhook-test/');
+            // Caso não tenha /webhook/ para substituir, mas o usuário queira modo teste
+            if (!urlInput.value.includes('/webhook-test/')) {
+                urlInput.value = urlInput.value.replace('webhook', 'webhook-test');
+            }
+        }
+        if (badge) {
+            badge.style.background = 'var(--status-conversa)';
+            if (badgeText) badgeText.textContent = 'Modo Teste';
+        }
+        showNotification('Modo de Teste ativado! Certifique-se de usar "Listen for test event" no n8n.', 'info');
+    } else {
+        if (urlInput) {
+            urlInput.value = urlInput.value.replace('/webhook-test/', '/webhook/');
+        }
+        if (badge) {
+            badge.style.background = 'var(--status-novo)';
+            if (badgeText) badgeText.textContent = 'Produção';
+        }
+        showNotification('Modo Produção ativado! O Workflow deve estar ATIVO no n8n.', 'success');
+    }
+}
+
+// Helper to test webhook connection
+window.testWebhookConnection = async function () {
+    showNotification('Testando conexão com n8n...', 'info');
+    try {
+        const result = await sendToN8N('ping_test', {
+            message: 'Teste de conexão do sistema',
+            fromMe: true,
+            isGroup: false
+        });
+        console.log('Webhook test result:', result);
+        showNotification('✅ Conexão estabelecida com sucesso!', 'success');
+    } catch (e) {
+        console.error('Falha no teste de webhook:', e);
+        const targetUrl = getN8nUrl();
+        const curlCmd = `curl -X POST "${targetUrl}" -H "Content-Type: application/json" -d '{"event":"ping_test","message":"Teste manual"}'`;
+
+        showNotification(`❌ Erro: ${e.message}`, 'error');
+
+        // Oferecer cópia do comando CURL para teste fora do navegador
+        if (confirm(`Falha no navegador (provavelmente CORS). Deseja copiar um comando CURL para testar no seu terminal/CMD? Isso confirma se o n8n está recebendo dados.`)) {
+            navigator.clipboard.writeText(curlCmd);
+            showNotification('Comando CURL copiado! Cole no Prompt de Comando/Terminal.', 'success');
+        }
+    }
+}
+
+function loadBroadcastConfig() {
+    const saved = localStorage.getItem('passionpro_broadcast_config');
+    if (saved) {
+        try {
+            const config = JSON.parse(saved);
+            broadcastConfig = {
+                ...broadcastConfig,
+                ...config,
+                limit: parseInt(config.limit) || 50,
+                intervalMin: parseInt(config.intervalMin) || 30,
+                intervalMax: parseInt(config.intervalMax) || 90
+            };
+
+            // Update UI
+            if (document.getElementById('broadcast-limit')) document.getElementById('broadcast-limit').value = config.limit;
+            if (document.getElementById('broadcast-interval-min')) document.getElementById('broadcast-interval-min').value = config.intervalMin;
+            if (document.getElementById('broadcast-interval-max')) document.getElementById('broadcast-interval-max').value = config.intervalMax;
+            if (document.getElementById('broadcast-time-start')) document.getElementById('broadcast-time-start').value = config.timeStart;
+            if (document.getElementById('broadcast-time-end')) document.getElementById('broadcast-time-end').value = config.timeEnd;
+            if (document.getElementById('broadcast-filter-status')) document.getElementById('broadcast-filter-status').value = config.filterStatus;
+            if (document.getElementById('broadcast-message')) document.getElementById('broadcast-message').value = config.message || '';
+            if (document.getElementById('broadcast-type')) document.getElementById('broadcast-type').value = config.messageType || 'text';
+            if (document.getElementById('broadcast-media-url')) document.getElementById('broadcast-media-url').value = config.mediaUrl || '';
+
+            toggleMediaUrlField();
+            updateBroadcastPreview();
+        } catch (e) {
+            console.error('Erro ao carregar config de disparo:', e);
+        }
+    }
+}
+
