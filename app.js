@@ -2152,11 +2152,40 @@ async function loadAIConfig() {
             document.getElementById('ai-voice-style').value = data.voice_speed_style || '';
             document.getElementById('ai-system-prompt').value = data.system_prompt || DEFAULT_SYSTEM_PROMPT;
 
-            // n8n Fields
-            if (document.getElementById('n8n-webhook-url')) document.getElementById('n8n-webhook-url').value = data.n8n_webhook_url || 'https://adryanlife.app.n8n.cloud/webhook/sistemafolowup';
+            // n8n Fields - Try from DB first, fallback to localStorage
+            const n8nWebhookUrl = data.n8n_webhook_url;
+            const n8nTestMode = data.n8n_test_mode;
+
+            // Se não encontrou no banco, tenta carregar do localStorage
+            const localN8nConfig = localStorage.getItem('n8n_config');
+            let localWebhookUrl = null;
+            let localTestMode = null;
+
+            if (localN8nConfig) {
+                try {
+                    const parsedConfig = JSON.parse(localN8nConfig);
+                    localWebhookUrl = parsedConfig.webhook_url;
+                    localTestMode = parsedConfig.test_mode;
+                } catch (e) {
+                    console.error('Erro ao parsear n8n_config do localStorage:', e);
+                }
+            }
+
+            // DECISÃO FINAL: Prioridade para o Banco, depois Local, depois vazio
+            console.log('📡 Webhook DB:', n8nWebhookUrl);
+            console.log('💾 Webhook Local:', localWebhookUrl);
+
+            // Lógica: Se DB tem string não vazia, usa ela. Senão tenta local.
+            const finalWebhook = (n8nWebhookUrl && n8nWebhookUrl.trim() !== '') ? n8nWebhookUrl : (localWebhookUrl || '');
+            console.log('🚀 Webhook FINAL:', finalWebhook);
+
+            if (document.getElementById('n8n-webhook-url')) {
+                document.getElementById('n8n-webhook-url').value = finalWebhook;
+            }
             if (document.getElementById('n8n-test-mode')) {
-                document.getElementById('n8n-test-mode').checked = data.n8n_test_mode || false;
-                toggleN8nMode(data.n8n_test_mode || false); // Sincroniza visual do badge
+                const testModeValue = n8nTestMode !== undefined ? n8nTestMode : (localTestMode !== null ? localTestMode : false);
+                document.getElementById('n8n-test-mode').checked = testModeValue;
+                toggleN8nMode(testModeValue); // Sincroniza visual do badge
             }
 
             // WhatsApp Fields
@@ -2165,11 +2194,45 @@ async function loadAIConfig() {
             if (document.getElementById('wa-api-url')) document.getElementById('wa-api-url').value = data.wa_api_url || '';
             if (document.getElementById('wa-api-key')) document.getElementById('wa-api-key').value = data.wa_api_key || '';
         } else {
+            // Se não tem configuração no banco, tenta carregar do localStorage
+            const localN8nConfig = localStorage.getItem('n8n_config');
+
+            if (localN8nConfig) {
+                try {
+                    const parsedConfig = JSON.parse(localN8nConfig);
+                    if (document.getElementById('n8n-webhook-url') && parsedConfig.webhook_url) {
+                        document.getElementById('n8n-webhook-url').value = parsedConfig.webhook_url;
+                    }
+                    if (document.getElementById('n8n-test-mode') && parsedConfig.test_mode !== undefined) {
+                        document.getElementById('n8n-test-mode').checked = parsedConfig.test_mode;
+                        toggleN8nMode(parsedConfig.test_mode);
+                    }
+                } catch (e) {
+                    console.error('Erro ao carregar n8n do localStorage:', e);
+                }
+            }
 
             document.getElementById('ai-system-prompt').value = DEFAULT_SYSTEM_PROMPT;
         }
     } catch (e) {
         console.error('Erro ao carregar config IA:', e);
+
+        // Em caso de erro, tenta carregar do localStorage também
+        const localN8nConfig = localStorage.getItem('n8n_config');
+        if (localN8nConfig) {
+            try {
+                const parsedConfig = JSON.parse(localN8nConfig);
+                if (document.getElementById('n8n-webhook-url') && parsedConfig.webhook_url) {
+                    document.getElementById('n8n-webhook-url').value = parsedConfig.webhook_url;
+                }
+                if (document.getElementById('n8n-test-mode') && parsedConfig.test_mode !== undefined) {
+                    document.getElementById('n8n-test-mode').checked = parsedConfig.test_mode;
+                    toggleN8nMode(parsedConfig.test_mode);
+                }
+            } catch (e2) {
+                console.error('Erro ao carregar n8n do localStorage (fallback):', e2);
+            }
+        }
     }
 }
 
@@ -2227,6 +2290,13 @@ async function saveAIConfig() {
     };
 
     console.log('🔵 Tentando salvar configuração:', configFull);
+
+    // SEMPRE salvar n8n no localStorage como backup (independente do que acontecer com o DB)
+    localStorage.setItem('n8n_config', JSON.stringify({
+        webhook_url: configFull.n8n_webhook_url,
+        test_mode: configFull.n8n_test_mode
+    }));
+    console.log('💾 Configurações n8n salvas no localStorage com sucesso');
 
     try {
         const { data: existing, error: selectError } = await _supabase.from('ai_agent_config').select('id').maybeSingle();
@@ -2297,33 +2367,28 @@ async function saveAIConfig() {
                     throw retryError;
                 }
 
-                console.log('✅ Salvo SEM campos n8n (salvo apenas localmente)');
-                // Salvar n8n no localStorage como fallback
-                localStorage.setItem('n8n_config', JSON.stringify({
-                    webhook_url: configFull.n8n_webhook_url,
-                    test_mode: configFull.n8n_test_mode
-                }));
-                showNotification('⚠️ Configurações salvas (n8n salvo localmente). Execute o SQL de atualização!', 'warning');
+                console.log('✅ Salvo SEM campos n8n no banco (n8n salvo localmente)');
+                showNotification('✅ Configurações salvas! (n8n: localStorage)', 'success');
                 return;
             }
 
             throw error;
         }
 
-        console.log('✅ Configuração salva com sucesso!');
+        console.log('✅ Configuração salva com sucesso no banco + localStorage!');
         showNotification('Configurações da IA salvas!', 'success');
     } catch (e) {
         console.error('❌ Erro detalhado ao salvar config IA:', e);
 
         // Mensagem mais específica para o usuário
-        let errorMsg = 'Erro ao salvar configurações';
+        let errorMsg = 'Erro ao salvar configurações no banco';
         if (e.message && e.message.includes('column')) {
-            errorMsg = 'Erro: Execute o script SQL "update_ai_table_n8n.sql" no Supabase primeiro!';
+            errorMsg = 'Configurações salvas (n8n: apenas local). Execute o SQL de atualização para salvar no banco';
         } else if (e.message) {
             errorMsg = `Erro: ${e.message}`;
         }
 
-        showNotification(errorMsg, 'error');
+        showNotification(errorMsg, 'warning');
     }
 }
 
