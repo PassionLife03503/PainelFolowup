@@ -929,27 +929,51 @@
                             <textarea id="ai-system-prompt" style="font-family: monospace; font-size: 0.9rem;" rows="15"
                                 placeholder="Instruções fundamentais do agente..."></textarea>
                         </div>
-                        <div class="ai-test-container">
-                            <div class="form-group">
-                                <label>Testar Resposta do Agente</label>
-                                <div style="display: flex; gap: 0.5rem;">
-                                    <input type="text" id="ai-test-input"
-                                        placeholder="Digite uma pergunta para o agente..." style="flex: 1;">
-                                    <button class="btn-primary" onclick="testAIResponse()">
-                                        <i data-lucide="play"></i>
-                                        Testar
+                        <!-- Chat Simulator Container -->
+                        <div class="ai-chat-simulator">
+                            <div class="chat-header">
+                                <div class="chat-user-info">
+                                    <div class="chat-avatar">B</div>
+                                    <div>
+                                        <strong>Simulador de Atendimento: Bianca</strong>
+                                        <p><span class="online-status"></span> Online agora</p>
+                                    </div>
+                                </div>
+                                <button class="btn-icon" onclick="clearAIChat()" title="Limpar Conversa">
+                                    <i data-lucide="trash-2"></i>
+                                </button>
+                            </div>
+
+                            <div id="ai-chat-history" class="chat-history">
+                                <div class="chat-date">Hoje</div>
+                                <div class="message incoming">
+                                    <div class="message-content">
+                                        Oi! Tudo bem? 😊<br><br>
+                                        Aqui é a Bianca da PassionLife.<br>
+                                        Vi que você já fez parte da nossa família há um tempo e quis retomar
+                                        contato.<br><br>
+                                        <strong>Você ainda trabalha com moda íntima/praia ou mudou de área?</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="chat-input-area">
+                                <input type="text" id="ai-test-input"
+                                    placeholder="Digite sua mensagem como se fosse um cliente..."
+                                    onkeypress="if(event.key === 'Enter') testAIResponse()">
+                                <div class="chat-actions">
+                                    <button class="btn-chat-send" onclick="testAIResponse()"
+                                        title="Testar Personalidade">
+                                        <i data-lucide="send"></i>
                                     </button>
-                                    <button class="btn-primary"
-                                        style="background: var(--status-reativado); border: none;"
-                                        onclick="testAIWithKnowledgeBase()">
+                                    <button class="btn-chat-knowledge" onclick="testAIWithKnowledgeBase()"
+                                        title="Testar com Base de Dados">
                                         <i data-lucide="database"></i>
-                                        Testar com Documento
                                     </button>
                                 </div>
                             </div>
-                            <div id="ai-test-output" class="ai-test-output" style="display: none;">
-                                <div class="output-header">Resposta do Agente:</div>
-                                <div class="output-content" id="ai-test-output-content"></div>
+                            <div id="ai-typing-indicator" class="typing-indicator" style="display: none;">
+                                <span></span><span></span><span></span>
                             </div>
                         </div>
                         <div class="form-actions">
@@ -1068,6 +1092,13 @@
                                 </ul>
                                 </p>
                             </div>
+
+                            <div class="form-actions" style="margin-top: 2rem;">
+                                <button type="button" class="btn-primary" onclick="saveAIConfig()">
+                                    <i data-lucide="save"></i>
+                                    Salvar Configuração n8n
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -1116,11 +1147,9 @@
                                     </div>
                                     <h4 style="color: #25d366;">Integração via Envio Automático</h4>
                                 </div>
-                                <p style="font-size: 0.85rem; color: var(--text-main);">
-                                    Ao configurar estas credenciais, o software poderá enviar mensagens
-                                    automaticamente
-                                    durante os disparos, sem a necessidade de clicar em cada link do WhatsApp.
-                                </p>
+                                <p style="font-size: 0.85rem; color: var(--text-muted);">As credenciais acima são
+                                    usadas pelo servidor para autenticar as requisições de disparo. Mantenha os dados
+                                    protegidos.</p>
                             </div>
 
                             <div class="form-actions" style="margin-top: 2rem;">
