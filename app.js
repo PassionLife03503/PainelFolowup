@@ -7,13 +7,6 @@ const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let N8N_BASE_URL = 'https://adryanlife.app.n8n.cloud/webhook/sistemafolowup';
 let isN8nTestMode = false;
 
-function getN8nUrl() {
-    const input = document.getElementById('n8n-webhook-url');
-    // Se o usuário editou o campo, usamos o valor dele, caso contrário o padrão
-    let url = input ? input.value : N8N_BASE_URL;
-    return url;
-}
-
 // App State
 let leadsData = [];
 let charts = {};
@@ -88,6 +81,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     initTheme();
     initCharts();
+    loadAIConfig(); // Load AI configuration from Supabase
+    loadAIDocuments(); // Load AI documents from Supabase
+    loadBroadcastConfig(); // Load broadcast config from localStorage
 
     if (leadsData.length > 0) {
         updateCharts();
@@ -151,14 +147,15 @@ function setupEventListeners() {
 
             sendToN8N('lead_interaction', {
                 lead: updatedLead,
+                whatsappNumber: formatPhoneForWA(updatedLead.telefone),
                 action: actionText,
-                message: description, // Padronizado para 'message'
+                message: description,
                 details: description,
                 vendedora: JSON.parse(localStorage.getItem('passionpro_session')),
-                fromMe: !isCustomerMessage, // false se for resposta do cliente
+                fromMe: !isCustomerMessage,
                 isGroup: false,
                 isMassSending: false,
-                messageType: messageType // Enviando o tipo capturado (audio, imagem, doc, texto)
+                messageType: messageType
             }).catch(e => console.error('Erro n8n interaction:', e));
 
             updatedLead.lastActionDate = Date.now(); // Update interaction time
@@ -253,24 +250,72 @@ function setupEventListeners() {
 
     // Clear Data
     const clearDataBtn = document.getElementById('clear-data');
-    clearDataBtn.addEventListener('click', () => {
-        if (leadsData.length === 0) {
-            showNotification('Não há dados para remover.', 'error');
-            return;
-        }
+    if (clearDataBtn) {
+        clearDataBtn.addEventListener('click', async () => {
+            if (leadsData.length === 0) {
+                showNotification('Não há dados para remover.', 'error');
+                return;
+            }
 
-        if (confirm('Tem certeza que deseja remover todos os dados da planilha carregada?')) {
-            localStorage.removeItem('passionpro_leads');
-            leadsData = [];
-            filteredData = [];
-            currentPage = 1;
+            const profile = JSON.parse(localStorage.getItem('passionpro_session'));
+            const isAdmin = profile && profile.role === 'admin';
 
-            updateFilterOptions();
-            updateStats();
-            renderTable();
-            showNotification('Dados removidos com sucesso!', 'success');
-        }
-    });
+            let confirmMsg = 'Tem certeza que deseja remover todos os seus leads?';
+            if (isAdmin) {
+                confirmMsg = 'Você é ADMIN. Deseja remover APENAS OS SEUS LEADS ou LIMPAR O BANCO DE DADOS INTEIRO? \n\nClique em OK para APENAS OS SEUS ou CANCELAR para desistir (Use o Painel Admin para limpeza global).';
+            }
+
+            if (confirm(confirmMsg)) {
+                try {
+                    showNotification('Removendo dados da nuvem...', 'info');
+
+                    const { data: { session } } = await _supabase.auth.getSession();
+                    if (session) {
+                        let query = _supabase.from('leads_followup').delete();
+
+                        // Se não for admin, ou se for admin mas quiser deletar apenas os seus
+                        if (!isAdmin) {
+                            query = query.eq('vendedora_id', session.user.id);
+                        } else {
+                            // Se for admin, perguntamos se quer deletar TUDO (perigoso)
+                            if (confirm('⚠️ ATENÇÃO: Deseja apagar os leads de TODOS os vendedores do sistema? Esta ação é irreversível.')) {
+                                // Deleta tudo (sem filtro de vendedora_id)
+                                // Nota: RLS deve permitir isso para admins
+                            } else {
+                                // Deleta apenas os do admin
+                                query = query.eq('vendedora_id', session.user.id);
+                            }
+                        }
+
+                        const { error } = await query;
+                        if (error) throw error;
+                    }
+
+                    localStorage.removeItem('passionpro_leads');
+                    leadsData = [];
+                    filteredData = [];
+                    currentPage = 1;
+
+                    updateFilterOptions();
+                    updateStats();
+                    renderTable();
+                    showNotification('Dados removidos com sucesso da nuvem e local!', 'success');
+                } catch (e) {
+                    console.error('Erro ao limpar dados:', e);
+                    showNotification('Erro ao remover dados da nuvem: ' + e.message, 'error');
+                }
+            }
+        });
+    }
+
+    // Botão de Limpar Dados no Painel Admin (se houver outro ID)
+    const clearDataAdminBtn = document.getElementById('clear-data-admin');
+    if (clearDataAdminBtn) {
+        clearDataAdminBtn.addEventListener('click', () => {
+            // Reutiliza a lógica ou chama o outro botão
+            document.getElementById('clear-data').click();
+        });
+    }
 
     // Page Size
     pageSizeSelect.addEventListener('change', (e) => {
@@ -416,11 +461,12 @@ function processLeadsData(data) {
             cidade: item['CIDADE'] || item['Cidade'] || 'N/A',
             proximaAcao: 'Analisar perfil para reativação',
             telefone: rawPhone,
-            lastAction: '', // Chamei e não respondeu, etc.
+            whatsappNumber: formatPhoneForWA(rawPhone),
+            lastAction: '',
             lastActionDate: (item['DATA DE CADASTRO'] instanceof Date) ? item['DATA DE CADASTRO'].getTime() : Date.now(),
-            details: '',     // Descrição detalhada
-            isMessaged: false, // Novo: rastreia se o WhatsApp foi clicado
-            nextActionDate: null // Data da próxima ação
+            details: '',
+            isMessaged: false,
+            nextActionDate: null
         };
     });
 }
@@ -2102,8 +2148,16 @@ async function loadAIConfig() {
             document.getElementById('ai-tone').value = data.tone_of_voice || 'elegant';
             document.getElementById('ai-voice-enabled').checked = data.enable_voice || false;
             document.getElementById('ai-voice-provider').value = data.voice_provider || 'elevenlabs';
+            document.getElementById('ai-voice-id').value = data.voice_id || '';
             document.getElementById('ai-voice-style').value = data.voice_speed_style || '';
             document.getElementById('ai-system-prompt').value = data.system_prompt || DEFAULT_SYSTEM_PROMPT;
+
+            // n8n Fields
+            if (document.getElementById('n8n-webhook-url')) document.getElementById('n8n-webhook-url').value = data.n8n_webhook_url || 'https://adryanlife.app.n8n.cloud/webhook/sistemafolowup';
+            if (document.getElementById('n8n-test-mode')) {
+                document.getElementById('n8n-test-mode').checked = data.n8n_test_mode || false;
+                toggleN8nMode(data.n8n_test_mode || false); // Sincroniza visual do badge
+            }
 
             // WhatsApp Fields
             if (document.getElementById('wa-api-platform')) document.getElementById('wa-api-platform').value = data.wa_api_platform || 'evolution';
@@ -2119,8 +2173,40 @@ async function loadAIConfig() {
     }
 }
 
+// Auxiliar para formatar a resposta da IA (Markdown básico)
+function formatAIResponse(text) {
+    if (!text) return '';
+    // Converte **texto** para negrito
+    let formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Converte links simples em tags <a> se necessário (opcional)
+    return formatted;
+}
+
+// Auxiliar para obter a configuração completa da IA da interface
+function getAIConfigPayload() {
+    const activeDocs = (aiDocuments || []).filter(doc => doc.is_active).map(doc => ({
+        name: doc.file_name,
+        path: doc.storage_path,
+        type: doc.file_type
+    }));
+
+    return {
+        personality: document.getElementById('ai-personality')?.value || '',
+        characteristics: document.getElementById('ai-characteristics')?.value || '',
+        tone: document.getElementById('ai-tone')?.value || 'elegant',
+        system_prompt: document.getElementById('ai-system-prompt')?.value || '',
+        active_documents: activeDocs,
+        voice: {
+            enabled: document.getElementById('ai-voice-enabled')?.checked || false,
+            provider: document.getElementById('ai-voice-provider')?.value || '',
+            id: document.getElementById('ai-voice-id')?.value || '',
+            style: document.getElementById('ai-voice-style')?.value || ''
+        }
+    };
+}
+
 async function saveAIConfig() {
-    const config = {
+    const configFull = {
         agent_personality: document.getElementById('ai-personality').value,
         agent_characteristics: document.getElementById('ai-characteristics').value,
         tone_of_voice: document.getElementById('ai-tone').value,
@@ -2129,6 +2215,10 @@ async function saveAIConfig() {
         voice_id: document.getElementById('ai-voice-id').value,
         voice_speed_style: document.getElementById('ai-voice-style').value,
         system_prompt: document.getElementById('ai-system-prompt').value,
+        // n8n Fields
+        n8n_webhook_url: document.getElementById('n8n-webhook-url')?.value,
+        n8n_test_mode: document.getElementById('n8n-test-mode')?.checked,
+        // WhatsApp Fields
         wa_api_platform: document.getElementById('wa-api-platform')?.value,
         wa_instance_name: document.getElementById('wa-instance-name')?.value,
         wa_api_url: document.getElementById('wa-api-url')?.value,
@@ -2136,29 +2226,104 @@ async function saveAIConfig() {
         updated_at: new Date().toISOString()
     };
 
+    console.log('🔵 Tentando salvar configuração:', configFull);
 
     try {
-        const { data: existing } = await _supabase.from('ai_agent_config').select('id').maybeSingle();
+        const { data: existing, error: selectError } = await _supabase.from('ai_agent_config').select('id').maybeSingle();
+
+        if (selectError) {
+            console.error('❌ Erro ao buscar config existente:', selectError);
+            throw selectError;
+        }
 
         let error;
         if (existing) {
+            console.log('📝 Atualizando registro existente (ID:', existing.id, ')');
             const result = await _supabase
                 .from('ai_agent_config')
-                .update(config)
+                .update(configFull)
                 .eq('id', existing.id);
             error = result.error;
         } else {
+            console.log('➕ Criando novo registro');
             const result = await _supabase
                 .from('ai_agent_config')
-                .insert([config]);
+                .insert([configFull]);
             error = result.error;
         }
 
-        if (error) throw error;
+        if (error) {
+            console.error('❌ Erro do Supabase:', error);
+            console.error('❌ Detalhes completos:', JSON.stringify(error, null, 2));
+
+            // Se o erro for de coluna inexistente, tenta novamente SEM as colunas n8n
+            if (error.message && (error.message.includes('column') || error.message.includes('n8n'))) {
+                console.warn('⚠️ Detectado erro de coluna. Tentando salvar SEM campos n8n...');
+
+                // Config sem os campos n8n
+                const configBasic = {
+                    agent_personality: configFull.agent_personality,
+                    agent_characteristics: configFull.agent_characteristics,
+                    tone_of_voice: configFull.tone_of_voice,
+                    enable_voice: configFull.enable_voice,
+                    voice_provider: configFull.voice_provider,
+                    voice_id: configFull.voice_id,
+                    voice_speed_style: configFull.voice_speed_style,
+                    system_prompt: configFull.system_prompt,
+                    wa_api_platform: configFull.wa_api_platform,
+                    wa_instance_name: configFull.wa_instance_name,
+                    wa_api_url: configFull.wa_api_url,
+                    wa_api_key: configFull.wa_api_key,
+                    updated_at: configFull.updated_at
+                };
+
+                let retryError;
+                if (existing) {
+                    const retryResult = await _supabase
+                        .from('ai_agent_config')
+                        .update(configBasic)
+                        .eq('id', existing.id);
+                    retryError = retryResult.error;
+                } else {
+                    const retryResult = await _supabase
+                        .from('ai_agent_config')
+                        .insert([configBasic]);
+                    retryError = retryResult.error;
+                }
+
+                if (retryError) {
+                    console.error('❌ Erro no retry (sem n8n):', retryError);
+                    console.error('❌ Detalhes do retry:', JSON.stringify(retryError, null, 2));
+                    throw retryError;
+                }
+
+                console.log('✅ Salvo SEM campos n8n (salvo apenas localmente)');
+                // Salvar n8n no localStorage como fallback
+                localStorage.setItem('n8n_config', JSON.stringify({
+                    webhook_url: configFull.n8n_webhook_url,
+                    test_mode: configFull.n8n_test_mode
+                }));
+                showNotification('⚠️ Configurações salvas (n8n salvo localmente). Execute o SQL de atualização!', 'warning');
+                return;
+            }
+
+            throw error;
+        }
+
+        console.log('✅ Configuração salva com sucesso!');
         showNotification('Configurações da IA salvas!', 'success');
     } catch (e) {
-        console.error('Erro ao salvar config IA:', e);
-        showNotification('Erro ao salvar configurações', 'error');
+        console.error('❌ Erro detalhado ao salvar config IA:', e);
+
+        // Mensagem mais específica para o usuário
+        let errorMsg = 'Erro ao salvar configurações';
+        if (e.message && e.message.includes('column')) {
+            errorMsg = 'Erro: Execute o script SQL "update_ai_table_n8n.sql" no Supabase primeiro!';
+        } else if (e.message) {
+            errorMsg = `Erro: ${e.message}`;
+        }
+
+        showNotification(errorMsg, 'error');
     }
 }
 
@@ -2212,61 +2377,78 @@ window.testWhatsAppConnection = async function () {
 
 
 window.testAIResponse = async function () {
-    console.log('testAIResponse called');
     const inputEl = document.getElementById('ai-test-input');
-    const input = inputEl ? inputEl.value : '';
+    const message = inputEl ? inputEl.value.trim() : '';
 
-    if (!input.trim()) {
-        showNotification('Digite uma pergunta para o agente teste!', 'error');
-        return;
-    }
+    if (!message) return;
 
-    const outputContainer = document.getElementById('ai-test-output');
-    const outputContent = document.getElementById('ai-test-output-content');
+    // Add user message to chat
+    addChatMessage(message, 'outgoing');
+    inputEl.value = '';
 
-    if (outputContainer) {
-        outputContainer.style.display = 'block';
-        outputContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-
-    if (outputContent) {
-        outputContent.innerHTML = '<div class="typing-sim">O agente de IA (n8n) está processando sua resposta...</div>';
-    }
-
-    // Capture configurations
-    const personality = document.getElementById('ai-personality').value || '[Não definida]';
-    const toneSelect = document.getElementById('ai-tone');
-    const tone = toneSelect ? toneSelect.options[toneSelect.selectedIndex].text : 'Padrão';
+    const typingIndicator = document.getElementById('ai-typing-indicator');
+    if (typingIndicator) typingIndicator.style.display = 'flex';
 
     try {
+        const config = getAIConfigPayload();
         const responseData = await sendToN8N('ai_test', {
-            message: input, // Padronizado para 'message'
-            prompt: input,
-            personality: personality,
-            tone: tone,
-            system_prompt: document.getElementById('ai-system-prompt').value,
+            message: message,
+            prompt: message,
+            ...config,
+            whatsappNumber: "00000000000",
+            isTest: true,
             fromMe: true,
             messageType: 'text'
         });
 
-        if (outputContent) {
-            // Supondo que o n8n retorne um campo 'output' ou 'response'
-            const responseText = responseData?.output || responseData?.response || responseData?.text ||
-                "Resposta recebida do n8n, mas o formato não foi reconhecido. Verifique seu workflow.";
+        if (typingIndicator) typingIndicator.style.display = 'none';
 
-            outputContent.innerHTML = `
-                <div style="line-height: 1.5; color: var(--text-main);">
-                    <p>🤖 <strong>Resposta do Agente de IA:</strong></p>
-                    <div style="margin-top: 10px; padding: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
-                        ${responseText}
-                    </div>
-                </div>
-            `;
+        const getResponseText = (data) => {
+            if (!data) return null;
+            const body = Array.isArray(data) ? data[0] : data;
+            return body.output || body.response || body.text || body.message || body.data ||
+                (typeof body === 'string' ? body : null);
+        };
+
+        const responseText = getResponseText(responseData);
+        if (responseText) {
+            addChatMessage(responseText, 'incoming');
+        } else {
+            addChatMessage('⚠️ Erro: Formato de resposta não reconhecido pelo simulador.', 'incoming');
+            console.log('Dados recebidos:', responseData);
         }
     } catch (e) {
-        if (outputContent) {
-            outputContent.innerHTML = `<div style="color: #ef4444;">Erro ao conectar com n8n: ${e.message}</div>`;
-        }
+        if (typingIndicator) typingIndicator.style.display = 'none';
+        addChatMessage(`❌ Erro de conexão: ${e.message}`, 'incoming');
+    }
+}
+
+// Function to add a bubble to the chat simulator
+function addChatMessage(text, type) {
+    const chatHistory = document.getElementById('ai-chat-history');
+    if (!chatHistory) return;
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${type}`;
+
+    // Process markdown (bold) for income messages
+    const formattedText = type === 'incoming' ? formatAIResponse(text) : text;
+
+    messageDiv.innerHTML = `
+        <div class="message-content">
+            ${formattedText}
+        </div>
+    `;
+
+    chatHistory.appendChild(messageDiv);
+    chatHistory.scrollTop = chatHistory.scrollHeight; // Scroll to bottom
+}
+
+window.clearAIChat = function () {
+    const chatHistory = document.getElementById('ai-chat-history');
+    if (chatHistory) {
+        chatHistory.innerHTML = '<div class="chat-date">Chat Reiniciado</div>';
+        addChatMessage('Oi! Tudo bem? 😊<br><br>Aqui é a Bianca da PassionLife.<br>Vi que você já fez parte da nossa família há um tempo e quis retomar contato.<br><br><strong>Você ainda trabalha com moda íntima/praia ou mudou de área?</strong>', 'incoming');
     }
 }
 
@@ -2453,12 +2635,9 @@ window.copyFinalPrompt = function () {
 
 window.testAIWithKnowledgeBase = async function () {
     const inputEl = document.getElementById('ai-test-input');
-    const input = inputEl ? inputEl.value : '';
+    const message = inputEl ? inputEl.value.trim() : '';
 
-    if (!input.trim()) {
-        showNotification('Digite uma pergunta para testar com a base!', 'error');
-        return;
-    }
+    if (!message) return;
 
     const activeDocs = aiDocuments.filter(d => d.is_active);
     if (activeDocs.length === 0) {
@@ -2466,45 +2645,42 @@ window.testAIWithKnowledgeBase = async function () {
         return;
     }
 
-    const outputContainer = document.getElementById('ai-test-output');
-    const outputContent = document.getElementById('ai-test-output-content');
+    addChatMessage(message, 'outgoing');
+    inputEl.value = '';
 
-    if (outputContainer) {
-        outputContainer.style.display = 'block';
-        outputContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-
-    if (outputContent) {
-        outputContent.innerHTML = '<div class="typing-sim">O n8n está consultando sua Base de Conhecimento RAG...</div>';
-    }
+    const typingIndicator = document.getElementById('ai-typing-indicator');
+    if (typingIndicator) typingIndicator.style.display = 'flex';
 
     try {
+        const config = getAIConfigPayload();
         const responseData = await sendToN8N('ai_knowledge_query', {
-            message: input, // Padronizado para 'message'
-            prompt: input,
-            documents: activeDocs,
-            system_prompt: document.getElementById('ai-system-prompt').value,
+            message: message,
+            prompt: message,
+            ...config,
+            whatsappNumber: "00000000000",
+            isTest: true,
             fromMe: true,
             messageType: 'text'
         });
 
-        if (outputContent) {
-            const responseText = responseData?.output || responseData?.response || responseData?.text ||
-                "Resposta RAG recebida do n8n, mas o formato não foi reconhecido.";
+        if (typingIndicator) typingIndicator.style.display = 'none';
 
-            outputContent.innerHTML = `
-                <div style="line-height: 1.5; color: var(--text-main);">
-                    <p>📚 <strong>Resposta Baseada em Conhecimento (n8n):</strong></p>
-                    <div style="margin-top: 10px; padding: 1rem; background: rgba(16, 185, 129, 0.1); border-left: 4px solid var(--status-reativado); border-radius: 8px;">
-                        ${responseText}
-                    </div>
-                </div>
-            `;
+        const getResponseText = (data) => {
+            if (!data) return null;
+            const body = Array.isArray(data) ? data[0] : data;
+            return body.output || body.response || body.text || body.message || body.data ||
+                (typeof body === 'string' ? body : null);
+        };
+
+        const responseText = getResponseText(responseData);
+        if (responseText) {
+            addChatMessage(`📚 [Base de Dados]: ${responseText}`, 'incoming');
+        } else {
+            addChatMessage('⚠️ Erro RAG: Formato não reconhecido.', 'incoming');
         }
     } catch (e) {
-        if (outputContent) {
-            outputContent.innerHTML = `<div style="color: #ef4444;">Erro RAG ao conectar com n8n: ${e.message}</div>`;
-        }
+        if (typingIndicator) typingIndicator.style.display = 'none';
+        addChatMessage(`❌ Erro RAG: ${e.message}`, 'incoming');
     }
 }
 
@@ -2782,40 +2958,46 @@ async function runBroadcastCycle() {
 
     // Integração com n8n para o disparo
     try {
-        // Registrar o envio individual (dispatch) no Supabase
-        let dispatchId = null;
-        if (currentCampaignId) {
-            try {
-                const { data: dispatch, error: dError } = await _supabase.from('campaign_dispatches').insert([{
-                    campaign_id: currentCampaignId,
-                    contact_phone: (lead.telefone || '').replace(/\D/g, ''),
-                    status: 'sent',
-                    sent_at: new Date().toISOString()
-                }]).select().single();
+        console.log(`🚀 Iniciando processo de envio para: ${lead.nome} (${lead.telefone})`);
 
-                if (dispatch) dispatchId = dispatch.id;
-            } catch (de) {
-                console.error('Erro ao criar registro de dispatch:', de);
-            }
-        }
-
-        await sendToN8N('broadcast_lead', {
+        // 1. Enviar para o n8n primeiro (Prioridade)
+        const config = getAIConfigPayload();
+        const n8nPayload = {
             lead: lead,
+            whatsappNumber: formatPhoneForWA(lead.telefone),
             message: finalMessage,
             rawMessage: broadcastConfig.message,
             config: broadcastConfig,
+            ai_config: config, // Envia a personalidade atual para o disparo
             campaignId: currentCampaignId,
-            dispatchId: dispatchId,
             vendedora: JSON.parse(localStorage.getItem('passionpro_session')),
             fromMe: true,
             isGroup: false,
-            isMassSending: true, // Identifica envio em massa
+            isMassSending: true,
             messageType: broadcastConfig.messageType || 'text',
             mediaUrl: broadcastConfig.mediaUrl || ''
-        });
+        };
+
+        // Não usamos await aqui se quisermos que seja ultra rápido, 
+        // mas como é um loop com intervalo, o await é mais seguro para não atropelar
+        const n8nResponse = await sendToN8N('broadcast_lead', n8nPayload);
+        console.log('✅ Resposta do n8n recebida:', n8nResponse);
+
+        // 2. Registrar o envio no Supabase (Segundo plano/Opcional)
+        if (currentCampaignId) {
+            _supabase.from('campaign_dispatches').insert([{
+                campaign_id: currentCampaignId,
+                contact_phone: formatPhoneForWA(lead.telefone),
+                status: 'sent',
+                sent_at: new Date().toISOString()
+            }]).then(({ error }) => {
+                if (error) console.error('Erro ao registrar dispatch no Supabase:', error);
+                else console.log('📊 Dispatch registrado no Supabase.');
+            });
+        }
     } catch (error) {
-        console.error('Falha no envio do lead para o n8n:', error);
-        // Continuamos o ciclo mesmo se um falhar
+        console.error('❌ Falha Crítica no ciclo de disparo:', error);
+        showNotification(`Erro ao enviar para ${lead.nome}. Verifique o console.`, 'error');
     }
 
 
@@ -2828,6 +3010,30 @@ async function runBroadcastCycle() {
     const randomInterval = Math.floor(Math.random() * (intMax - intMin + 1)) + intMin;
     console.log(`Próximo envio em ${randomInterval} segundos`);
     broadcastTimer = setTimeout(runBroadcastCycle, randomInterval * 1000);
+}
+
+// Helper to format phone for WhatsApp (55 + DDD + Number)
+function formatPhoneForWA(phone) {
+    if (!phone) return '';
+    let cleaned = phone.toString().replace(/\D/g, '');
+
+    // Regra para Brasil: se tiver 10 ou 11 dígitos, adiciona o 55
+    if (cleaned.length === 10 || cleaned.length === 11) {
+        if (!cleaned.startsWith('55')) {
+            cleaned = '55' + cleaned;
+        }
+    }
+    return cleaned;
+}
+
+// Helper to get n8n URL from config
+function getN8nUrl() {
+    const urlInput = document.getElementById('n8n-webhook-url');
+    if (urlInput && urlInput.value) {
+        return urlInput.value;
+    }
+    // Fallback to default
+    return 'https://adryanlife.app.n8n.cloud/webhook/sistemafolowup';
 }
 
 // Helper to send data to n8n
